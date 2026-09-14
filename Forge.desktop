@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Forge
+Comment=Local ComfyUI image and video studio
+Exec=bash -lc '"$(dirname "%k")/start-forge.sh"'
+Path=
+Terminal=true
+Icon=applications-graphics
+Categories=Graphics;

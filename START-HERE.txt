@@ -1,0 +1,27 @@
+FORGE — offline on your T1000 (Linux Mint)
+==========================================
+
+This is the studio. It talks only to ComfyUI on this PC. No cloud.
+
+1. Keep ComfyUI running the way you already do:
+     cd ~/comfy/ComfyUI
+     source .venv/bin/activate
+     python main.py --listen 0.0.0.0 --port 8188
+
+2. Unzip this folder anywhere, e.g. ~/forge
+
+3. First time only: install Node.js 22+ from Linux Mint Software Manager
+   (search “Node.js”). Then double-click start-forge.sh, or in the folder:
+     chmod +x start-forge.sh
+     ./start-forge.sh
+
+   The first launch downloads packages once. After that it stays offline.
+
+4. On this PC open http://127.0.0.1:8080
+   iPhone / laptop: same Wi-Fi, scan the LAN QR in Forge.
+
+5. Settings already default to http://127.0.0.1:8188
+   Pick your real Flux / WAN filenames if they differ.
+
+Generate queues on your GPU. Workflows embed into ComfyUI.
+Unfiltered. No Grok API. No live preview required.
