@@ -69,10 +69,12 @@ curl -sS -m 5 http://192.168.1.165:11434/api/tags
 | Setting | Value |
 |---|---|
 | ComfyUI address | `http://127.0.0.1:8188` |
-| Local writer URL | `http://192.168.1.165:11434` |
-| Writer model | `huihui_ai/qwen2.5-abliterate:3b` (fallback: `dolphin-phi`) |
+| Local writer URL | `http://127.0.0.1:11434` (T1000 CPU Ollama) |
+| Writer model | `huihui_ai/qwen2.5-abliterate:7b` (backup: `dolphin3:8b`) |
 
-Keep Ollama **off the 4080**. Comfy already holds ~14 GB VRAM. Writer stays on Skynet so Generate does not slow down.
+Keep Ollama **off the 4080**. On T1000, `/etc/systemd/system/ollama.service.d/cpu.conf` sets `OLLAMA_NUM_GPU=0`. Comfy holds the VRAM. Writer uses RAM + the i9.
+
+Skynet (`192.168.1.165:11434`) is a spare 3B if T1000 Ollama is down.
 
 ---
 
