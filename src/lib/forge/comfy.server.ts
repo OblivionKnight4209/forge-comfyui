@@ -379,7 +379,13 @@ function rescueStrayLoras(): string[] {
       }
       const stray = !isRealCheckpoint(ent.name) || size < minBytes;
       if (!stray) continue;
-      const dest = path.join(loraDir, ent.name);
+      const destDir = isNotALora(ent.name) ? path.join(os.homedir(), "comfy/not-models") : loraDir;
+      try {
+        fs.mkdirSync(destDir, { recursive: true });
+      } catch {
+        continue;
+      }
+      const dest = path.join(destDir, ent.name);
       try {
         if (fs.existsSync(dest)) {
           fs.unlinkSync(src);

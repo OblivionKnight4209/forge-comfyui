@@ -18,6 +18,7 @@ import {
   pickWanVae,
   pairWanUnets,
   sameStill,
+  isNotALora,
   ckptBase,
   type Aspect,
   type ComfySettings,
@@ -336,7 +337,9 @@ export const useForge = create<ForgeState>()(
         const have = new Map(get().loras.map((l) => [l.filename, l]));
         const prefs = get().loraPrefs;
         if (status.loras.length) {
-          const merged: LoraEntry[] = status.loras.map((filename) => {
+          const merged: LoraEntry[] = status.loras
+            .filter((filename) => !isNotALora(filename))
+            .map((filename) => {
             const prev = have.get(filename);
             const pref = prefs[filename];
             if (prev) {

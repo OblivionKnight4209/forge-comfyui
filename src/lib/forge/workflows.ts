@@ -703,12 +703,12 @@ export function buildApiWorkflow(args: BuildArgs): ApiPrompt {
     args.mode === "ref2v" ||
     args.mode === "v2v" ||
     args.mode === "v2i";
-  if (video) return wanVideo(args);
-  const ckpt = args.settings.checkpoint || args.settings.fluxUnet || "";
-  if (args.settings.stillLoader === "flux-unet" || guessArch(ckpt) === "flux") {
-    return fluxStill(args);
-  }
-  return sdxlStill(args);
+  const graph = video
+    ? wanVideo(args)
+    : args.settings.stillLoader === "flux-unet" || guessArch(args.settings.checkpoint || args.settings.fluxUnet || "") === "flux"
+      ? fluxStill(args)
+      : sdxlStill(args);
+  return stripBrokenLoraNodes(graph);
 }
 
 export function apiToUiWorkflow(api: ApiPrompt, name: string) {
@@ -811,10 +811,11 @@ export function pickLorasForPrompt(
   family: ModelFamily,
   ckptName?: string,
 ): { ok: LoraEntry[]; named: LoraEntry[]; dropped: LoraEntry[]; blocked: LoraEntry[] } {
-  const enabled = loras.filter((l) => l.enabled);
+  const pool = loras.filter((l) => !isNotALora(l.filename));
+  const enabled = pool.filter((l) => l.enabled);
   const blocked = enabled.filter((l) => !loraFitsCheckpoint(l.filename, family, ckptName));
   const fitOn = enabled.filter((l) => loraFitsCheckpoint(l.filename, family, ckptName));
-  const named = matchNamedLoras(prompt, loras, family, ckptName);
+  const named = matchNamedLoras(prompt, pool, family, ckptName);
   const quality = fitOn.filter((l) => {
     if (!isQualityLora(l.filename)) return false;
     return guessLoraLane(l.filename) !== "any";
@@ -867,6 +868,28 @@ export function triggerPrefix(loras: LoraEntry[], prompt: string) {
     .filter((w) => !prompt.toLowerCase().includes(w.toLowerCase()));
   if (!missing.length) return prompt;
   return `${missing.join(", ")}, ${prompt}`;
+}
+
+export function stripBrokenLoraNodes(prompt: ApiPrompt): ApiPrompt {
+  const ids = Object.keys(prompt).filter((id) => {
+    const n = prompt[id];
+    if (!n || !/lora/i.test(n.class_type || "")) return false;
+    return isNotALora(String(n.inputs?.lora_name || ""));
+  });
+  for (const id of ids) {
+    const n = prompt[id];
+    if (!n) continue;
+    const modelIn = n.inputs.model;
+    const clipIn = n.inputs.clip;
+    delete prompt[id];
+    for (const other of Object.values(prompt)) {
+      for (const [k, v] of Object.entries(other.inputs)) {
+        if (!Array.isArray(v) || v[0] !== id) continue;
+        other.inputs[k] = v[1] === 1 && clipIn ? clipIn : modelIn;
+      }
+    }
+  }
+  return prompt;
 }
 
 export function jobBasename(job: Job) {

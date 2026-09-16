@@ -891,6 +891,25 @@ describe("loras", () => {
     assert.equal(isNotALora("add_detail.safetensors"), false);
     assert.equal(isNotALora("alice.safetensors"), false);
   });
+  it("strips the truncated Stable Yogi file out of a graph", () => {
+    const g = graph({
+      mode: "t2i",
+      loras: [
+        {
+          id: "bad",
+          filename: "realismByStableYogi_v30INT8Q8Extended.safetensors",
+          name: "yogi",
+          family: "sdxl",
+          triggerWords: [],
+          unetStrength: 0.8,
+          clipStrength: 0.8,
+          enabled: true,
+        },
+      ],
+    });
+    const names = Object.values(g).map((n) => String(n.inputs.lora_name || ""));
+    assert.equal(names.some((n) => /INT8Q8/i.test(n)), false);
+  });
   it("drops XL-named lora on a 1.5 checkpoint", () => {
     const list: LoraEntry[] = [
       {

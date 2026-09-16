@@ -27,14 +27,15 @@ export const queueComfyFn = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { uploadToComfy, queuePrompt, saveUserWorkflow } = await import("./comfy.server");
     try {
+      const { rewireLoadImages, stripBrokenLoraNodes } = await import("./workflows");
       for (const img of data.images) {
         const name = await uploadToComfy(data.baseUrl, img.dataUrl, img.filename);
-        const { rewireLoadImages } = await import("./workflows");
         rewireLoadImages(
           data.workflow as Record<string, { class_type?: string; inputs?: Record<string, unknown> }>,
           { [img.filename]: name },
         );
       }
+      stripBrokenLoraNodes(data.workflow as import("./workflows").ApiPrompt);
       const { promptId } = await queuePrompt(
         data.baseUrl,
         data.workflow as Record<string, unknown>,

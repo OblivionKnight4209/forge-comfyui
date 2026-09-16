@@ -1,5 +1,5 @@
 import type { ComfyStatus } from "./types";
-import { rewireLoadImages } from "./workflows";
+import { rewireLoadImages, stripBrokenLoraNodes } from "./workflows";
 
 export async function lanProbe(): Promise<ComfyStatus> {
   let last = "";
@@ -224,6 +224,7 @@ export async function browserQueue(
         { [img.filename]: name },
       );
     }
+    stripBrokenLoraNodes(workflow as import("./workflows").ApiPrompt);
     const res = await fetch(`${P}/prompt`, {
       method: "POST",
       headers: { "content-type": "application/json" },
