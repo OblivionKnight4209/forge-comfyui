@@ -14,6 +14,7 @@ import {
   guessStyles,
   checkpointMatchesStyle,
   isRealCheckpoint,
+  isImageCheckpoint,
   isWanUnet,
   wanPairOk,
   wanStackVersion,
@@ -794,6 +795,9 @@ describe("checkpoints", () => {
     assert.equal(isRealCheckpoint("DasiwaIllustriousAnime_epitaphecstasy.safetensors"), true);
     assert.equal(isRealCheckpoint("lumina_2.safetensors"), false);
     assert.equal(isRealCheckpoint("NextDiT.safetensors"), false);
+    assert.equal(isImageCheckpoint("DasiwaIllustriousAnime_epitaphecstasy.safetensors"), true);
+    assert.equal(isImageCheckpoint("wan2.1_i2v_480p.safetensors"), false);
+    assert.equal(isImageCheckpoint("svd_xt.safetensors"), false);
   });
   it("guesses families", () => {
     assert.equal(guessArch("chilloutmix_NiPrunedFp32Fix.safetensors"), "sd15");

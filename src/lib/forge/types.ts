@@ -605,6 +605,17 @@ export function guessArch(name: string): ModelFamily {
   return "sdxl";
 }
 
+/** Still-image mixes only — skip WAN / SVD / 3D. */
+export function isImageCheckpoint(name: string) {
+  if (!isRealCheckpoint(name)) return false;
+  const n = (name || "").toLowerCase().replace(/\\/g, "/");
+  const base = n.split("/").pop() || n;
+  if (/hunyuan3d|triposr|svd_xt|\bsvd\b|i2v|t2v|ti2v/.test(base)) return false;
+  if (/wan/.test(base) && !/swan|want|waning/.test(base)) return false;
+  const arch = guessArch(name);
+  return arch === "sd15" || arch === "sdxl" || arch === "flux";
+}
+
 export function sizeForFamily(
   family: "flux" | "sdxl" | "sd15",
   aspect: Aspect,

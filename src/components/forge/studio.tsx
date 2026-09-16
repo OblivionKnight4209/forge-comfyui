@@ -64,6 +64,7 @@ import {
   wanFrameCount,
   wanFpsForDuration,
   isRealCheckpoint,
+  isImageCheckpoint,
   canEditPhoto,
   pickVaeName,
   resolveCkpt,
@@ -1388,7 +1389,9 @@ export function Studio() {
         quality: state.qualityPick,
         roll: state.promptRoll,
         checkpoint: opts?.checkpoint || state.settings.checkpoint,
-        settings: state.settings,
+        settings: opts?.checkpoint
+          ? { ...state.settings, ...settingsForCheckpoint(opts.checkpoint) }
+          : state.settings,
         images,
         loras: state.loras.filter((l) => l.enabled).slice(0, 8),
       });
@@ -1884,20 +1887,24 @@ export function Studio() {
   }
 
   async function runMixes() {
-    const names = mixPick.filter((n) => isRealCheckpoint(n)).slice(0, 12);
+    const names = mixPick.filter(isImageCheckpoint);
     if (!names.length) {
-      toast.error("Tick the mixes you want. This tab runs the same prompt on each.");
+      const msg = "Tick the image checkpoints you want. This tab runs the same prompt + same seed on each.";
+      setQueueBanner(msg);
+      logForge("warn", "All ckpts", msg);
       return;
     }
     if (!useForge.getState().prompt.trim()) {
-      toast.error("Type a prompt first.");
+      const msg = "Type a prompt first.";
+      setQueueBanner(msg);
       return;
     }
     const prev = useForge.getState().settings.checkpoint;
-    if (!useForge.getState().seedLocked) useForge.getState().rollSeed();
+    if (!useForge.getState().seedLocked) useForge.getState().toggleSeedLock();
     const seedUsed = useForge.getState().seed;
     const ids: string[] = [];
-    toast.message(`Queueing ${names.length} mixes · same seed ${seedUsed}`);
+    setQueueBanner(`Queueing ${names.length} checkpoints · seed ${seedUsed} locked`);
+    logForge("info", "All ckpts", `${names.length} · seed ${seedUsed}`);
     for (const name of names) {
       const before = new Set(useForge.getState().jobs.map((j) => j.id));
       await generate({ checkpoint: name, keepSeed: true, quiet: true });
@@ -1906,7 +1913,8 @@ export function Studio() {
     }
     setMixJobIds(ids);
     if (prev) useForge.getState().setSettings(settingsForCheckpoint(prev));
-    toast.success(`${ids.length} mixes queued. Same seed ${seedUsed}. Comfy runs them one after another.`);
+    setQueueBanner(`${ids.length} queued · seed ${seedUsed} · Comfy runs them one after another`);
+    logForge("info", "All ckpts", `${ids.length} queued, seed ${seedUsed}`);
   }
 
   function fireGenerate() {
@@ -1966,7 +1974,7 @@ export function Studio() {
     <div className="flex min-h-dvh flex-col bg-bg pb-8 text-fg">
       <header className="flex items-center gap-3 px-4 py-3 md:px-6">
         <p className="text-[15px] font-medium tracking-tight">Forge</p>
-        <span className="text-[11px] tabular-nums text-subtle">177</span>
+        <span className="text-[11px] tabular-nums text-subtle">178</span>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {meta.video ? (
             <select
@@ -2064,9 +2072,16 @@ export function Studio() {
           variant="ghost"
           size="icon"
           className="size-9 min-h-9 min-w-9"
-          onClick={() => setTab("mixes")}
-          aria-label="Mixes"
-          title="Same prompt on several mixes"
+          onClick={() => {
+            setTab("mixes");
+            const st = useForge.getState();
+            st.setMode("t2i");
+            if (!st.seedLocked) st.toggleSeedLock();
+            const image = (comfy?.checkpoints ?? []).filter(isImageCheckpoint);
+            setMixPick((prev) => (prev.length ? prev : image));
+          }}
+          aria-label="All checkpoints"
+          title="Same prompt and seed on every image checkpoint"
         >
           <Images />
         </Button>
@@ -2103,7 +2118,7 @@ export function Studio() {
 
       <div className="flex flex-col gap-1 px-2 md:px-4">
         <div className="flex items-center gap-0.5">
-          {(["image", "video", "combine"] as const).map((g) => (
+          {(["image", "video", "combine", "mixes"] as const).map((g) => (
             <button
               key={g}
               type="button"
@@ -2121,9 +2136,16 @@ export function Studio() {
                 st.setEditChange("");
                 setShowSource(false);
                 setZoom(null);
-                st.setMedia([]);
-                st.setRefPrompt("");
-                st.setMode(g === "image" ? "t2i" : "t2v");
+                if (g !== "mixes") {
+                  st.setMedia([]);
+                  st.setRefPrompt("");
+                }
+                st.setMode(g === "video" ? "t2v" : "t2i");
+                if (g === "mixes") {
+                  if (!st.seedLocked) st.toggleSeedLock();
+                  const image = (comfy?.checkpoints ?? []).filter(isImageCheckpoint);
+                  setMixPick((prev) => (prev.length ? prev : image));
+                }
                 if (g === "video") {
                   st.setDuration(6);
                   st.setSoundOn(true);
@@ -2142,17 +2164,40 @@ export function Studio() {
                   : "text-subtle hover:text-fg",
               )}
             >
-              {g === "image" ? "Image" : g === "combine" ? "Combine" : "Video"}
+              {g === "image" ? "Image" : g === "combine" ? "Combine" : g === "video" ? "Video" : "All ckpts"}
             </button>
           ))}
         </div>
         {tab === "mixes" ? (
           <div className="mt-2 space-y-2">
-            <p className="text-sm text-muted">Same prompt, same seed. Tick mixes, then Generate. Max 12.</p>
+            <p className="text-sm text-muted">
+              Type a prompt below. Seed is locked so every mix starts the same. Tick the image checkpoints, then Run.
+              Comfy does them one after another — 40 mixes can take hours.
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-subtle">Seed {seed} locked</span>
+              <Button
+                type="button"
+                size="sm"
+                variant={seedLocked ? "default" : "secondary"}
+                onClick={() => useForge.getState().toggleSeedLock()}
+              >
+                {seedLocked ? "Unlock seed" : "Lock seed"}
+              </Button>
+              <Button type="button" size="sm" variant="secondary" onClick={() => useForge.getState().rollSeed()}>
+                New seed
+              </Button>
+              <Input
+                className="h-9 w-32 bg-raised"
+                value={seed}
+                onChange={(e) => useForge.getState().setSeed(Number(e.target.value) || 0)}
+                aria-label="Seed"
+              />
+            </div>
             <Input
               value={mixQ}
               onChange={(e) => setMixQ(e.target.value)}
-              placeholder="Filter mixes…"
+              placeholder="Filter checkpoints…"
               className="h-10 bg-raised"
             />
             <div className="flex flex-wrap gap-1">
@@ -2163,23 +2208,24 @@ export function Studio() {
                 onClick={() =>
                   setMixPick(
                     ckpts
-                      .filter(isRealCheckpoint)
+                      .filter(isImageCheckpoint)
                       .filter((n) => !mixQ || n.toLowerCase().includes(mixQ.toLowerCase()))
-                      .filter((n) => ckptStyle === "all" || checkpointMatchesStyle(n, ckptStyle))
-                      .slice(0, 12),
+                      .filter((n) => ckptStyle === "all" || checkpointMatchesStyle(n, ckptStyle)),
                   )
                 }
               >
-                Tick first 12
+                Tick all image
               </Button>
               <Button type="button" size="sm" variant="secondary" onClick={() => setMixPick([])}>
                 Clear
               </Button>
-              <span className="self-center text-xs text-subtle">{mixPick.length} ticked</span>
+              <span className="self-center text-xs text-subtle">
+                {mixPick.length} ticked · {ckpts.filter(isImageCheckpoint).length} image ckpts
+              </span>
             </div>
-            <div className="grid max-h-48 grid-cols-1 gap-1 overflow-auto sm:grid-cols-2">
+            <div className="grid max-h-56 grid-cols-1 gap-1 overflow-auto sm:grid-cols-2">
               {ckpts
-                .filter(isRealCheckpoint)
+                .filter(isImageCheckpoint)
                 .filter((n) => !mixQ || n.toLowerCase().includes(mixQ.toLowerCase()))
                 .filter((n) => ckptStyle === "all" || checkpointMatchesStyle(n, ckptStyle))
                 .map((n) => {
@@ -2189,14 +2235,7 @@ export function Studio() {
                       key={n}
                       type="button"
                       onClick={() =>
-                        setMixPick((prev) => {
-                          if (prev.includes(n)) return prev.filter((x) => x !== n);
-                          if (prev.length >= 12) {
-                            toast.error("Max 12 mixes at once");
-                            return prev;
-                          }
-                          return [...prev, n];
-                        })
+                        setMixPick((prev) => (prev.includes(n) ? prev.filter((x) => x !== n) : [...prev, n]))
                       }
                       className={cn(
                         "truncate rounded-lg px-2 py-2 text-left text-xs",
