@@ -1308,11 +1308,12 @@ describe("wildcards extra", () => {
     assert.match(sceneCore(filled), /cat fight a dog/i);
     assert.doesNotMatch(sceneCore(filled), /overcast|detailed fur/i);
   });
-  it("sceneCore keeps nsfw flags so Brain cannot SFW-wash a reroll", () => {
-    const filled = "sexy anime girl with barely any clothes, silk, nsfw, explicit, uncensored, adult 18+, window light";
+  it("sceneCore is the subject so Brain can rewrite", () => {
+    const filled =
+      "sexy anime girl with barely any clothes, silk, nsfw, explicit, uncensored, adult 18+, window light";
     const c = sceneCore(filled);
     assert.match(c, /sexy anime girl/i);
-    assert.match(c, /nsfw|explicit|uncensored/i);
+    assert.ok(c.split(",").length <= 2);
   });
   it("adult prompt stays uncensored after expand", () => {
     const t = grokExpand({
@@ -1358,6 +1359,20 @@ describe("wildcards extra", () => {
       nsfwMode: false,
     });
     assert.doesNotMatch(t, /uncensored, explicit, nsfw/i);
+  });
+  it("Brain subject of a filled line is short enough to lookFill", () => {
+    const filled =
+      "cat fight a dog, small compact tabby, dirt yard, low angle full bodies, overcast, detailed fur";
+    assert.equal(isShortSubject(sceneCore(filled)), true);
+    const t = grokExpand({
+      typed: sceneCore(filled),
+      files: DEFAULT_WILDCARDS,
+      seed: 21,
+      family: "sdxl",
+      checkpoint: "DasiwaIllustrious.safetensors",
+    });
+    assert.ok(t.length > sceneCore(filled).length + 20);
+    assert.match(t, /fur|whisker|muzzle|paw|tabby/i);
   });
   it("two Brain seeds on the same subject are not copies", () => {
     const a = grokExpand({

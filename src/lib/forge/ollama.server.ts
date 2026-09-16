@@ -203,10 +203,10 @@ export async function runBrain(opts: {
             { role: "system", content: brainSystem({ wrap: opts.wrap, checkpoint: opts.checkpoint, nsfwMode: opts.nsfwMode }) },
             { role: "user", content: brainUser({ prompt: opts.prompt, flavor: opts.flavor, fresh: opts.fresh, nsfwMode: opts.nsfwMode }) },
           ],
-          options: { temperature: 1.25, top_p: 0.95, seed, num_predict: 400, num_ctx: 4096 },
+          options: { temperature: 1.25, top_p: 0.95, seed, num_predict: 280, num_ctx: 4096 },
         }),
       },
-      90000,
+      14000,
     );
     if (!res.ok) {
       const t = await res.text().catch(() => "");

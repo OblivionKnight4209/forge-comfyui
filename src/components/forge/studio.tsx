@@ -81,7 +81,7 @@ import {
   type Mode,
   type ModelFamily,
 } from "@/lib/forge/types";
-import { PROMPT_FLAVORS, expandPrompt, grokExpand, grokMotion, writeIdeas, writePrompt, isAdult, flattenPrompt, userLead, recoverScene, composeNewScene, isPurpleProse, sceneCore, tokenOverlap, nsfwWanted, type PromptFlavor } from "@/lib/forge/wildcards";
+import { PROMPT_FLAVORS, expandPrompt, grokExpand, grokMotion, writeIdeas, writePrompt, isAdult, flattenPrompt, userLead, recoverScene, composeNewScene, isPurpleProse, sceneCore, tokenOverlap, nsfwWanted, isShortSubject, type PromptFlavor } from "@/lib/forge/wildcards";
 import { composeI2iPrompt, expandEditFields } from "@/lib/forge/edit-prompt";
 import { isVideoName, mediaMime, withVideoDataUrl } from "@/lib/forge/media-mime";
 import { writeExtreme, writeDarkSet, writeTabooSet, writeHorrorSet, isWashed, NSFW_TYPES, nsfwGroup, writeMenus, WHO_BITS, WHERE_BITS, MORE_BITS, COMIC_BITS, EVIL_BITS, FACE_BITS, BODY_BITS, CLOTHES_BITS, PLACE_BITS, CAM_BITS, LIGHT_BITS } from "@/lib/forge/extreme";
@@ -1139,65 +1139,64 @@ export function Studio() {
       state.mode === "ref2i"
         ? state.refPrompt.trim() || state.prompt.trim()
         : state.prompt.trim();
-    const core0 = sceneCore(line) || line || "an adult";
-    const core =
-      state.nsfwMode && nsfwWanted(core0, true) && !/\bnsfw\b/i.test(core0)
-        ? `${core0}, nsfw, explicit, uncensored, adult 18+`
-        : core0;
-    setBrainBusy(true);
+    const core = sceneCore(line) || line || "an adult";
+    const fam =
+      state.settings.stillFamily === "sd15" || guessArch(state.settings.checkpoint) === "sd15"
+        ? ("sd15" as const)
+        : state.settings.stillFamily === "flux"
+          ? ("flux" as const)
+          : ("sdxl" as const);
+    const seed = (Date.now() + Math.floor(Math.random() * 99991)) % 1_000_000_000;
+    const locals = [0, 1, 2].map((i) =>
+      grokExpand({
+        typed: core,
+        files: state.wildcards,
+        seed: seed + i * 7919,
+        family: fam,
+        checkpoint: state.settings.checkpoint,
+        roll: state.promptRoll,
+        nsfwMode: state.nsfwMode,
+      }),
+    );
+    const first = locals.find((t) => t && t !== core && t.length > core.length + 8) || locals[0] || core;
+    skipIdeaRefresh.current = true;
+    state.setPrompt(first);
+    if (state.mode === "ref2i") state.setRefPrompt(first);
+    setIdeas(locals.filter(Boolean).slice(0, 3));
     setDock("write");
-    logForge("info", "Brain", `New take of “${core.slice(0, 48)}”`);
+    setBrainBusy(true);
+    logForge("info", "Brain", `Filled “${core.slice(0, 40)}”`);
     try {
-      const seed = (Date.now() + Math.floor(Math.random() * 99991)) % 1_000_000_000;
       const r = await lanBrain({
         prompt: core,
         flavor,
         wrap: state.artWrap,
         checkpoint: state.settings.checkpoint,
-        fresh: true,
+        fresh: !isShortSubject(line),
         seed,
         nsfwMode: state.nsfwMode,
       });
-      const fam =
-        state.settings.stillFamily === "sd15" || guessArch(state.settings.checkpoint) === "sd15"
-          ? ("sd15" as const)
-          : state.settings.stillFamily === "flux"
-            ? ("flux" as const)
-            : ("sdxl" as const);
-      const locals = [0, 1, 2].map((i) =>
-        grokExpand({
-          typed: core,
-          files: state.wildcards,
-          seed: seed + i * 7919,
-          family: fam,
-          checkpoint: state.settings.checkpoint,
-          roll: state.promptRoll,
-          nsfwMode: state.nsfwMode,
-        }),
-      );
-      if (!r.ok) logForge("warn", "Brain", r.message);
-      const candidates = [r.ok ? r.text : "", ...locals]
-        .map((t) => t.replace(/\s+/g, " ").trim())
-        .filter((t) => t.length > 8);
-      const ranked = candidates
-        .map((t) => ({ t, o: tokenOverlap(t, line) }))
-        .sort((a, b) => a.o - b.o);
-      const unique: string[] = [];
-      for (const c of ranked) {
-        if (unique.some((u) => tokenOverlap(u, c.t) > 0.82)) continue;
-        unique.push(c.t);
-        if (unique.length >= 3) break;
+      if (!r.ok) {
+        logForge("warn", "Brain", r.message);
+        return true;
       }
-      const used = unique[0] || locals[0] || core;
+      const text = r.text.replace(/\s+/g, " ").trim();
+      const lost = core
+        .split(/\s+/)
+        .filter((w) => w.length > 2)
+        .slice(0, 3)
+        .some((w) => !text.toLowerCase().includes(w.toLowerCase()));
+      const same = tokenOverlap(text, line) > 0.78 || tokenOverlap(text, first) > 0.9;
+      const thin = text.split(/\s+/).length < 12;
+      if (lost || same || thin) {
+        logForge("info", "Brain", "Ollama echoed — kept the local fill");
+        return true;
+      }
       skipIdeaRefresh.current = true;
-      state.setPrompt(used);
-      if (state.mode === "ref2i") state.setRefPrompt(used);
-      setIdeas(unique.length ? unique : [used]);
-      logForge(
-        "info",
-        "Brain",
-        r.ok ? `New take · ${r.model.split("/").pop()}` : "Ollama missed — three local takes",
-      );
+      useForge.getState().setPrompt(text);
+      if (state.mode === "ref2i") useForge.getState().setRefPrompt(text);
+      setIdeas([text, ...locals.filter((t) => tokenOverlap(t, text) < 0.82)].slice(0, 3));
+      logForge("info", "Brain", `Ollama · ${r.model.split("/").pop()}`);
       return true;
     } finally {
       setBrainBusy(false);
@@ -2111,7 +2110,7 @@ export function Studio() {
     <div className="flex min-h-dvh flex-col bg-bg pb-8 text-fg">
       <header className="flex items-center gap-3 px-4 py-3 md:px-6">
         <p className="text-[15px] font-medium tracking-tight">Forge</p>
-        <span className="text-[11px] tabular-nums text-subtle">189</span>
+        <span className="text-[11px] tabular-nums text-subtle">190</span>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {meta.video ? (
             <select
@@ -3105,12 +3104,8 @@ export function Studio() {
               <button
                 type="button"
                 disabled={brainBusy}
-                className={
-                  brainOn
-                    ? "inline-flex h-11 shrink-0 items-center rounded-full bg-accent px-3 text-sm font-medium text-accent-fg"
-                    : "hidden"
-                }
-                title={brainOn ? `Local brain · ${brainModel}` : "Ollama is off on the PC"}
+                className="inline-flex h-11 shrink-0 items-center rounded-full bg-accent px-3 text-sm font-medium text-accent-fg disabled:opacity-60"
+                title={brainOn ? `Fills the prompt. Local brain · ${brainModel}` : "Fills the prompt locally. Turn Ollama on for a smarter rewrite."}
                 onClick={() => void runBrain()}
               >
                 {brainBusy ? "…" : "Brain"}

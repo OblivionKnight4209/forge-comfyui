@@ -608,15 +608,7 @@ export function sceneCore(text: string): string {
   const lead = userLead(isPurpleProse(t) ? recoverScene(t) || t : t);
   const chunk = (lead.split(",")[0] || lead).trim();
   const words = chunk.split(/\s+/).filter(Boolean);
-  const core = words.length <= 12 ? chunk : words.slice(0, 10).join(" ");
-  const flags: string[] = [];
-  if (isAdult(t)) flags.push("nsfw", "explicit", "uncensored", "adult 18+");
-  if (/\b(rape|forced|noncon|non-con)\b/i.test(t)) flags.push("forced");
-  if (/\b(gore|blood|stab|horror|viscera)\b/i.test(t)) flags.push("gore");
-  if (/\b(bdsm|bondage|hogtie|whip)\b/i.test(t)) flags.push("bdsm");
-  if (/\b(gay|yaoi|mlm|femboy)\b/i.test(t)) flags.push("gay");
-  if (/\b(yuri|lesbian|wlw)\b/i.test(t)) flags.push("yuri");
-  return flags.length ? `${core}, ${[...new Set(flags)].join(", ")}` : core;
+  return words.length <= 12 ? chunk : words.slice(0, 10).join(" ");
 }
 
 export function tokenOverlap(a: string, b: string): number {
@@ -817,10 +809,13 @@ function extrasFor(text: string, anime: boolean, rng: () => number): {
     };
   }
   return {
-    beat: pickFrom(["mid-motion", "caught in the moment", "clear subject"], rng),
-    place: placeFromText(text, rng) || pickFrom(["open street", "interior", "night scene"], rng),
-    shot: pickFrom(["wide shot", "medium shot", "full body"], rng),
-    light: pickFrom(anime ? ["soft light", "rim light", "night"] : ["window light", "overcast"], rng),
+    beat: pickFrom(["mid-motion", "caught in the moment", "weight shifted", "clear subject"], rng),
+    place: placeFromText(text, rng) || pickFrom(["open street", "interior doorway", "night alley", "rain-wet lot"], rng),
+    ground: pickFrom(["wet pavement", "cracked concrete", "dirt and weeds", "worn floorboards"], rng),
+    weather: pickFrom(["overcast", "light rain", "still humid air", "wind kicking dust"], rng),
+    far: pickFrom(["distant buildings", "a fence line", "trees on the ridge", "a lit window"], rng),
+    shot: pickFrom(["wide shot", "medium shot", "full body", "low angle"], rng),
+    light: pickFrom(anime ? ["soft light", "rim light", "night neon"] : ["window light", "overcast", "streetlamp"], rng),
     finish,
   };
 }
