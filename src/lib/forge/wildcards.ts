@@ -754,7 +754,7 @@ function isDumbLook(scene: string, out: string) {
     return true;
   }
   if (!isAdult(s) && /ahegao|masturbat|handjob|ring gag|\banal\b/.test(o)) return true;
-  if (out.length < scene.trim().length + 50) return true;
+  if (out.length < Math.max(24, Math.min(scene.trim().length + 24, 80))) return true;
   return false;
 }
 
@@ -1178,11 +1178,16 @@ export function grokExpand(opts: {
     }),
     opts.seed,
   );
-  if (tooClose(out, lead) || tooClose(out, raw)) {
+  const thin = (s: string) =>
+    tooClose(s, lead) || tooClose(s, raw) || s.split(/\s+/).length <= lead.split(/\s+/).length + 6;
+  if (thin(out)) {
     const rng = mulberry32(opts.seed + 17);
     out = lookFill(lead, anime, rng);
   }
-  if (tooClose(out, lead)) {
+  if (thin(out)) {
+    out = grokFill(lead, anime, mulberry32(opts.seed + 31));
+  }
+  if (thin(out)) {
     out = flattenPrompt(withRandomBlocks(lead, nsfw), opts.seed);
   }
   return out;

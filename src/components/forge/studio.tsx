@@ -1142,44 +1142,37 @@ export function Studio() {
     const sceneUse = isPurpleProse(raw) ? recoverScene(raw) || raw : raw;
     const seed = Date.now() % 1_000_000_000;
     const picked = writeCatalog().filter((t) => nsfwPick.has(t.id));
-    const menu = writeMenus().find((m) => m.id === writeCat);
-    const extras = picked.length
-      ? picked
-      : !sceneUse && menu?.items.length
-        ? [...menu.items].sort(() => Math.random() - 0.5).slice(0, 5)
-        : [];
-    const lead = extras.length ? composeNewScene(sceneUse, extras) : sceneUse || "her";
-    if (extras.length && (flavor === "person" || flavor === "scene" || flavor === "enhance")) {
-      const first = flattenPrompt(
-        sceneUse ? lead : `${lead}, full body, detailed face, natural light`,
-        seed,
-      );
-      skipIdeaRefresh.current = true;
-      state.setPrompt(first);
-      if (state.mode === "ref2i") state.setRefPrompt(first);
-      setIdeas([first].filter(Boolean).slice(0, 4));
-      setChipTab("write");
-      setDock("write");
-      requestAnimationFrame(() => {
-        document.getElementById("forge-write-dock")?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-      });
-      return;
-    }
+    const woven = picked.length ? composeNewScene(sceneUse, picked) : sceneUse;
+    const fam =
+      state.settings.stillFamily === "sd15" || guessArch(state.settings.checkpoint) === "sd15"
+        ? ("sd15" as const)
+        : state.settings.stillFamily === "flux"
+          ? ("flux" as const)
+          : ("sdxl" as const);
+    const rewritten = grokExpand({
+      typed: woven || sceneUse || "an adult",
+      files: state.wildcards.length ? state.wildcards : [],
+      seed,
+      family: fam,
+      checkpoint: state.settings.checkpoint,
+      roll: state.promptRoll,
+    });
     const local =
       flavor === "horror"
-        ? writeHorrorSet(lead, seed)
+        ? writeHorrorSet(rewritten, seed)
         : flavor === "taboo"
-          ? writeTabooSet(lead, seed)
+          ? writeTabooSet(rewritten, seed)
           : flavor === "dark"
-            ? writeDarkSet(lead, seed)
+            ? writeDarkSet(rewritten, seed)
             : flavor === "sex" || flavor === "bdsm"
-              ? writeExtreme(lead, seed)
-              : writeIdeas(ideaOpts(flavor, lead, seed));
-    const lines = local.map((t, i) => flattenPrompt(t, seed + i)).filter(Boolean);
-    const first = lines[0] || lead;
+              ? writeExtreme(rewritten, seed)
+              : [rewritten, ...writeIdeas(ideaOpts(flavor, woven || sceneUse, seed))];
+    const lines = local.map((t, i) => flattenPrompt(t, seed + i)).filter((t) => t && t.trim().toLowerCase() !== (sceneUse || "").toLowerCase());
+    const first = lines[0] || flattenPrompt(rewritten, seed);
     skipIdeaRefresh.current = true;
     state.setPrompt(first);
     if (state.mode === "ref2i") state.setRefPrompt(first);
+    state.setExpandedPreview(first);
     setIdeas([first, ...lines.filter((l) => l !== first)].slice(0, 4));
     setChipTab("write");
     setDock("write");
@@ -1421,6 +1414,11 @@ export function Studio() {
       useForge.getState().addJob(job);
       void pushLive(job);
       setQueueBanner("");
+      if (r.prompt && (runMode === "t2i" || runMode === "t2v")) {
+        skipIdeaRefresh.current = true;
+        useForge.getState().setPrompt(r.prompt);
+        useForge.getState().setExpandedPreview(r.prompt);
+      }
       logForge("info", "Queue", `phone/laptop queued ${r.promptId}`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Could not reach the PC";
@@ -1752,6 +1750,10 @@ export function Studio() {
     if (runMode === "ref2i") {
       finalPrompt = `unified single scene combining the reference photos, not a split collage, not a grid, ${finalPrompt}`;
     }
+    if (!opts?.quiet && (runMode === "t2i" || runMode === "t2v")) {
+      skipIdeaRefresh.current = true;
+      useForge.getState().setPrompt(sent);
+    }
     if (runMode === "i2i" || runMode === "ref2i") {
       const change = /\b(remove|undress|take off|strip|add |change |replace |delete |put on|clothes|shirt|dress|nude|naked)\b/i.test(
         userPrompt,
@@ -1974,7 +1976,7 @@ export function Studio() {
     <div className="flex min-h-dvh flex-col bg-bg pb-8 text-fg">
       <header className="flex items-center gap-3 px-4 py-3 md:px-6">
         <p className="text-[15px] font-medium tracking-tight">Forge</p>
-        <span className="text-[11px] tabular-nums text-subtle">178</span>
+        <span className="text-[11px] tabular-nums text-subtle">179</span>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {meta.video ? (
             <select

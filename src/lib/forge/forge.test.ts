@@ -1194,6 +1194,19 @@ describe("wildcards extra", () => {
     assert.match(t, /cat/i);
     assert.match(t, /dog/i);
   });
+  it("Write always lengthens a short typed scene", () => {
+    const typed = "goblin vs woman";
+    const t = grokExpand({
+      typed,
+      files: DEFAULT_WILDCARDS,
+      seed: 44,
+      family: "sdxl",
+      checkpoint: "DasiwaIllustrious.safetensors",
+    });
+    assert.notEqual(t.trim().toLowerCase(), typed.toLowerCase());
+    assert.ok(t.split(/\s+/).length >= typed.split(/\s+/).length + 8);
+    assert.match(t, /goblin/i);
+  });
   it("curly mode builds {a|b} then flattens to one pick", () => {
     const curly = withRandomBlocks("cat fight a dog");
     assert.match(curly, /\{/);
