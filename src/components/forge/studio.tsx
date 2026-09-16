@@ -68,6 +68,7 @@ import {
   pairWanUnets,
   wanFrameCount,
   videoSegments,
+  isWan14b,
   wanFpsForDuration,
   isRealCheckpoint,
   isImageCheckpoint,
@@ -196,7 +197,7 @@ export function Studio() {
   const [mixJobIds, setMixJobIds] = useState<string[]>([]);
   const [mixQ, setMixQ] = useState("");
   const skipIdeaRefresh = useRef(false);
-  const generateRef = useRef<(opts?: { checkpoint?: string; keepSeed?: boolean; quiet?: boolean; continueVideo?: string; chainOf?: string[]; chainLeft?: number }) => Promise<void>>(async () => {});
+  const generateRef = useRef<(opts?: { checkpoint?: string; keepSeed?: boolean; quiet?: boolean; continueVideo?: string; chainOf?: string[]; chainLeft?: number; leanVideo?: boolean }) => Promise<void>>(async () => {});
   const chainBusy = useRef(false);
   const genLock = useRef(0);
   const lastComfyOk = useRef<boolean | null>(null);
@@ -486,9 +487,28 @@ export function Studio() {
           );
           if ("error" in r && r.error) {
             if (job.status !== "error") {
+              const oom = /out of memory|oom|would exceed allowed memory/i.test(r.error);
+              if (oom && !/lean retry/i.test(job.log || "")) {
+                useForge.getState().patchJob(job.id, {
+                  status: "queued",
+                  progress: 4,
+                  log: "VRAM full — lean retry",
+                  error: undefined,
+                });
+                logForge("warn", "Video", "VRAM full on the 4080. Retrying smaller (512 / 49 frames, no extra LoRAs).");
+                void generateRef.current({
+                  leanVideo: true,
+                  quiet: true,
+                  chainLeft: 0,
+                  keepSeed: true,
+                });
+                continue;
+              }
               useForge.getState().patchJob(job.id, {
                 status: "error",
-                error: r.error,
+                error: oom
+                  ? "VRAM full. Close other GPU apps, pick the WAN 5B (ti2v) mix, or Generate again for the small retry."
+                  : r.error,
                 log: r.log,
                 progress: 0,
               });
@@ -1602,6 +1622,7 @@ export function Studio() {
     continueVideo?: string;
     chainOf?: string[];
     chainLeft?: number;
+    leanVideo?: boolean;
   }) {
     const state = useForge.getState();
     const photoOn = state.media.some((m) => m.kind === "image");
@@ -1718,7 +1739,9 @@ export function Studio() {
         chainOf: opts?.chainOf,
         chainLeft:
           opts?.chainLeft ??
-          (MODE_META[runMode].video ? Math.max(0, videoSegments(state.duration) - 1) : 0),
+          (MODE_META[runMode].video && !isWan14b(state.settings.wanUnet)
+            ? Math.max(0, videoSegments(state.duration) - 1)
+            : 0),
       };
       useForge.getState().addJob(job);
       void pushLive(job);
@@ -1746,6 +1769,7 @@ export function Studio() {
     continueVideo?: string;
     chainOf?: string[];
     chainLeft?: number;
+    leanVideo?: boolean;
   }) {
     if (opts?.continueVideo) {
       useForge.getState().clearMedia();
@@ -2121,6 +2145,7 @@ export function Studio() {
       taggerClass: "",
       taggerModel: "",
       vaeName: pickVaeName(fam === "flux" || fam === "sd15" || fam === "sdxl" ? fam : "sdxl", settingsNow, useForge.getState().comfy?.vaes ?? []),
+      lean: Boolean(opts?.leanVideo),
     });
     const ui = apiToUiWorkflow(api, `Forge ${MODE_META[runMode].label}`);
     const job: Job = {
@@ -2139,7 +2164,12 @@ export function Studio() {
       chainOf: opts?.chainOf,
       chainLeft:
         opts?.chainLeft ??
-        (runMeta.video && !opts?.continueVideo ? Math.max(0, videoSegments(state.duration) - 1) : 0),
+        (runMeta.video &&
+        !opts?.continueVideo &&
+        !opts?.leanVideo &&
+        !isWan14b(settingsNow.wanUnet)
+          ? Math.max(0, videoSegments(state.duration) - 1)
+          : 0),
     };
     state.addJob(job);
     state.setExpandedPreview(finalPrompt);
@@ -2335,7 +2365,7 @@ export function Studio() {
     <div className="flex min-h-dvh flex-col bg-bg pb-8 text-fg">
       <header className="flex flex-wrap items-center gap-2 px-3 py-3 md:gap-3 md:px-6">
         <p className="text-[15px] font-medium tracking-tight">Forge</p>
-        <span className="text-[11px] tabular-nums text-subtle">209</span>
+        <span className="text-[11px] tabular-nums text-subtle">210</span>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {meta.video ? (
             <select

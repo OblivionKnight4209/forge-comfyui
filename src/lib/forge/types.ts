@@ -410,6 +410,17 @@ export function pickWanClip(clips: string[], current = "") {
   return pool[0] || "";
 }
 
+export function isWan14b(name: string) {
+  const n = (name || "").toLowerCase();
+  if (!/wan|i2v|t2v/.test(n)) return false;
+  if (/5b|ti2v/.test(n)) return false;
+  return /14b/.test(n);
+}
+
+export function isWan5b(name: string) {
+  return wanStackVersion(name) === "22";
+}
+
 export function wanPairOk(unet: string, vae: string) {
   if (!unet || !vae) return false;
   const u = wanStackVersion(unet) || "21";

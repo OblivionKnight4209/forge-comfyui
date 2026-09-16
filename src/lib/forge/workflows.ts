@@ -1,5 +1,5 @@
 import type { Aspect, ComfySettings, Job, LoraEntry, Mode, ModelFamily } from "./types";
-import { ASPECT_SIZE, guessArch, guessLoraLane, isHighNoiseUnet, isLightningUnet, isLowNoiseUnet, isNotALora, loraFitsCheckpoint, loraNameKeys, promptNameWords, sizeForFamily, wanStackVersion, wordHitsLoraName } from "./types";
+import { ASPECT_SIZE, guessArch, guessLoraLane, isHighNoiseUnet, isLightningUnet, isLowNoiseUnet, isNotALora, isWan14b, isWan5b, loraFitsCheckpoint, loraNameKeys, promptNameWords, sizeForFamily, wordHitsLoraName } from "./types";
 
 export type ApiNode = {
   class_type: string;
@@ -23,6 +23,7 @@ type BuildArgs = {
   taggerClass?: string;
   taggerModel?: string;
   vaeName?: string;
+  lean?: boolean;
 };
 
 function node(
@@ -408,9 +409,21 @@ function sdxlStill(args: BuildArgs): ApiPrompt {
   return prompt;
 }
 
-function videoSize(aspect: Aspect, unet = ""): { w: number; h: number } {
-  const v22 = wanStackVersion(unet) === "22";
-  if (v22) {
+function videoSize(aspect: Aspect, unet = "", lean = false): { w: number; h: number } {
+  const five = isWan5b(unet);
+  const heavy = isWan14b(unet);
+  if (lean || heavy) {
+    switch (aspect) {
+      case "9:16":
+      case "2:3":
+        return lean ? { w: 384, h: 640 } : { w: 480, h: 640 };
+      case "1:1":
+        return lean ? { w: 384, h: 384 } : { w: 512, h: 512 };
+      default:
+        return lean ? { w: 640, h: 384 } : { w: 640, h: 368 };
+    }
+  }
+  if (five) {
     switch (aspect) {
       case "9:16":
       case "2:3":
@@ -453,12 +466,15 @@ function loadWanUnet(name: string, title: string): ApiNode {
 }
 
 function wanVideo(args: BuildArgs): ApiPrompt {
-  const { w, h } = videoSize(args.aspect, args.settings.wanUnet);
+  const lean = Boolean(args.lean);
+  const { w, h } = videoSize(args.aspect, args.settings.wanUnet, lean);
   const s = args.settings;
   const fps = s.videoFps || 16;
-  const frames = Math.max(17, Math.min(s.videoFrames || 81, 81));
+  const heavy = isWan14b(s.wanUnet) || isWan14b(s.wanUnetLow);
+  const maxFrames = lean ? 33 : heavy ? 49 : 81;
+  const frames = Math.max(17, Math.min(s.videoFrames || maxFrames, maxFrames));
   const i2v = args.mode === "i2v" || args.mode === "ref2v" || args.mode === "v2v";
-  const is5b = wanStackVersion(s.wanUnet) === "22";
+  const is5b = isWan5b(s.wanUnet);
   const highName = isHighNoiseUnet(s.wanUnet)
     ? s.wanUnet
     : isHighNoiseUnet(s.wanUnetLow || "")
@@ -469,7 +485,7 @@ function wanVideo(args: BuildArgs): ApiPrompt {
     : isLowNoiseUnet(s.wanUnet)
       ? s.wanUnet
       : "";
-  const dual = Boolean(highName && lowName && highName !== lowName);
+  const dual = !lean && Boolean(highName && lowName && highName !== lowName);
   const primary = dual ? highName : s.wanUnet;
   const lightning = isLightningUnet(primary) || isLightningUnet(lowName);
   const steps = lightning
@@ -482,7 +498,11 @@ function wanVideo(args: BuildArgs): ApiPrompt {
   const split = dual ? Math.max(1, Math.floor(steps / 2)) : steps;
   const shift = i2v ? 5 : 8;
   const cfg = lightning ? 1 : dual ? (i2v ? 3.5 : 4) : i2v ? 5 : 6;
-  const wanLoras = args.loras.filter((l) => guessLoraLane(l.filename) === "wan" || /wan/i.test(l.name));
+  const wanLoras = lean
+    ? []
+    : args.loras
+        .filter((l) => guessLoraLane(l.filename) === "wan" || /wan/i.test(l.name))
+        .slice(0, heavy ? 1 : 3);
   const prompt: ApiPrompt = {
     "1": loadWanUnet(primary, dual ? "WAN HIGH" : "WAN UNET"),
     "2": /\.gguf$/i.test(s.wanClip)

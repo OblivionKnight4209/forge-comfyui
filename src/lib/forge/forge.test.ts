@@ -170,7 +170,7 @@ describe("i2i graph", () => {
     assert.ok(classes(g).includes("WanImageToVideo"));
     assert.ok(classes(g).includes("SaveVideo"));
   });
-  it("i2v uses WAN-native 832x480 so Play is not mush", () => {
+  it("i2v 14B uses a 16GB-safe size, not 832x480", () => {
     const g = graph({
       mode: "i2v",
       aspect: "16:9",
@@ -182,8 +182,9 @@ describe("i2i graph", () => {
       }),
     });
     const n = Object.values(g).find((x) => x.class_type === "WanImageToVideo");
-    assert.equal(n?.inputs.width, 832);
-    assert.equal(n?.inputs.height, 480);
+    assert.equal(n?.inputs.width, 640);
+    assert.equal(n?.inputs.height, 368);
+    assert.equal(n?.inputs.length, 49);
     const samp = Object.values(g).find((x) => x.class_type === "KSampler");
     assert.equal(samp?.inputs.cfg, 5);
   });
@@ -405,6 +406,41 @@ describe("WAN pair", () => {
     assert.equal(adv[1]?.inputs.add_noise, "disable");
     assert.ok(!classes(g).includes("KSampler"));
     assert.deepEqual(validateApiGraph(g), []);
+  });
+  it("14B i2v stays under 16GB: 480-wide and 49 frames", () => {
+    const g = graph({
+      mode: "i2v",
+      imageCount: 1,
+      aspect: "16:9",
+      settings: settings({
+        wanUnet: "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors",
+        wanUnetLow: "wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors",
+        wanVae: "wan_2.1_vae.safetensors",
+        wanClip: "umt5.safetensors",
+        videoFrames: 81,
+      }),
+    });
+    const lat = Object.values(g).find((n) => n.class_type === "WanImageToVideo");
+    assert.ok((lat?.inputs.width as number) <= 640);
+    assert.ok((lat?.inputs.height as number) <= 512);
+    assert.equal(lat?.inputs.length, 49);
+  });
+  it("lean 14B drops dual pass and extra frames", () => {
+    const g = graph({
+      mode: "i2v",
+      imageCount: 1,
+      lean: true,
+      settings: settings({
+        wanUnet: "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors",
+        wanUnetLow: "wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors",
+        wanVae: "wan_2.1_vae.safetensors",
+        wanClip: "umt5.safetensors",
+      }),
+    });
+    assert.equal(Object.values(g).filter((n) => n.class_type === "KSamplerAdvanced").length, 0);
+    assert.ok(classes(g).includes("KSampler"));
+    const lat = Object.values(g).find((n) => n.class_type === "WanImageToVideo");
+    assert.equal(lat?.inputs.length, 33);
   });
   it("Lightspeed dual uses 4 steps cfg 1", () => {
     const g = graph({
