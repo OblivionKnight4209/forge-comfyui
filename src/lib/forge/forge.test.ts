@@ -503,7 +503,11 @@ describe("writer", () => {
     assert.ok(BODY_BITS.length >= 50);
     assert.ok(CLOTHES_BITS.length >= 60);
     assert.ok(PLACE_BITS.length >= 60);
-    assert.ok(NSFW_TYPES.length >= 250);
+    assert.ok(NSFW_TYPES.length >= 380);
+    assert.ok(NSFW_TYPES.some((t) => t.id === "k-wand"));
+    assert.ok(NSFW_TYPES.some((t) => t.id === "k-spank"));
+    assert.ok(NSFW_TYPES.some((t) => t.id === "k-threesomm"));
+    assert.ok(writeMenus().some((m) => m.id === "kink"));
     assert.equal(nsfwGroup("rimming"), "Sex");
     assert.equal(nsfwGroup("lich"), "Creatures");
     assert.equal(nsfwGroup("flay"), "Horror");
