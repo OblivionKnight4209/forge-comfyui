@@ -697,14 +697,11 @@ export function Studio() {
     };
     add(stageSrc, stageKind === "video" ? "video" : "image", "stage");
     for (const l of likes) add(l.src, "image", "liked");
-    for (const f of liveFiles) {
-      add(`/forge-media?folder=output&name=${encodeURIComponent(f.name)}`, "image", f.name);
-    }
     for (const j of jobs) {
       if (j.resultDataUrl) add(j.resultDataUrl, j.resultKind, `seed ${j.seed}`);
     }
     return out;
-  }, [stageSrc, stageKind, likes, liveFiles, jobs]);
+  }, [stageSrc, stageKind, likes, jobs]);
 
   useEffect(() => {
     if (!zoom) return;
@@ -1766,7 +1763,7 @@ export function Studio() {
         idx += 1;
       }
       if ((tab === "combine" || (state.mode === "ref2i" && tab !== "comic")) && images.length < 2) {
-        const msg = "Combine needs 2 different photos. Tap another in Results — not the same one twice.";
+        const msg = "Combine needs 2 different photos. Open Library and tap another — not the same one twice.";
         setQueueBanner(msg);
         logForge("warn", "Combine", msg);
         return;
@@ -1942,7 +1939,7 @@ export function Studio() {
       });
     })();
     if (runMode === "ref2i" && inputs.filter((m) => m.kind === "image").length < 2) {
-      const msg = "Combine needs 2 different photos. That 2×2 was the same still stacked. Tap another in Results.";
+      const msg = "Combine needs 2 different photos. That 2×2 was the same still stacked. Open Library and tap another.";
       setQueueBanner(msg);
       logForge("warn", "Combine", msg);
       return;
@@ -2024,13 +2021,13 @@ export function Studio() {
     if (runMeta.needsImage && !inputs.some((m) => m.kind === "image")) {
       toast.error(
         tab === "video"
-          ? "Need a still for image-to-video. Tap one in Results or Library, then Generate."
+          ? "Need a still for image-to-video. Open Library, tap one, then Generate."
           : "No photo on the stage. Drop one, or tap Edit this on a result, then Generate.",
       );
       return;
     }
     if (runMode === "ref2i" && inputs.filter((m) => m.kind === "image").length < 2) {
-      toast.error("Combine needs 2 to 5 photos. Tap more from Results or Pick from library, then Generate.");
+      toast.error("Combine needs 2 to 5 photos. Open Library or drop more, then Generate.");
       return;
     }
     if ((runMode === "i2i" || runMode === "ref2i") && !canEditPhoto(state.settings.checkpoint)) {
@@ -2478,7 +2475,7 @@ export function Studio() {
     <div className="flex min-h-dvh flex-col bg-bg pb-8 text-fg">
       <header className="flex flex-wrap items-center gap-2 px-3 py-3 md:gap-3 md:px-6">
         <p className="text-[15px] font-medium tracking-tight">Forge</p>
-        <span className="text-[11px] tabular-nums text-subtle">212</span>
+        <span className="text-[11px] tabular-nums text-subtle">213</span>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {meta.video ? (
             <select
@@ -2993,10 +2990,10 @@ export function Studio() {
             <p className="text-2xl font-medium tracking-tight text-fg">Combine 2–5 photos</p>
             <p className="max-w-md text-center text-sm text-muted">
               {media.filter((x) => x.kind === "image").length >= 2
-                ? "Type the new scene below, then Generate. Tap a slot to remove. Tap Results or the library to add more."
+                ? "Type the new scene below, then Generate. Tap a slot to remove. Library tab to add more."
                 : media.filter((x) => x.kind === "image").length === 1
-                  ? "That’s slot 1. Tap a second photo from Results or the library. Then type the new scene."
-                  : "Tap photos from Results below or the library. Need at least two."}
+                  ? "That’s slot 1. Open Library for a second photo, or drop one. Then type the new scene."
+                  : "Open Library or drop photos. Need at least two."}
             </p>
             <div className="flex flex-wrap justify-center gap-2">
               {[0, 1, 2, 3, 4].map((i) => {
@@ -3093,18 +3090,21 @@ export function Studio() {
           <button
             type="button"
             className="flex h-[42dvh] w-full flex-col items-center justify-center gap-3 px-6 text-center md:h-[52dvh]"
-            onClick={openLibrary}
+            onClick={() => {
+              if (tab === "video") openLibrary();
+              else promptRef.current?.focus();
+            }}
           >
             <p className="text-2xl font-medium tracking-tight text-fg">
               {tab === "video" ? "Animate it" : "Imagine it"}
             </p>
             <p className="max-w-sm text-sm text-muted">
               {tab === "video"
-                ? "Pick a still from the library or Results — that photo is frame 1. Or type below for text-to-video."
-                : "Type below. Or pick a photo from the library to edit."}
+                ? "Library tab for a still as frame 1. Or type below for text-to-video."
+                : "Type below, Generate. One photo lands here. A batch fills the grid. Old files live in Library."}
             </p>
             <span className="rounded-full bg-accent px-5 py-2.5 text-sm text-accent-fg">
-              {tab === "video" ? "Add a still to animate" : "Library or type below"}
+              {tab === "video" ? "Library for a still" : "Type, then Generate"}
             </span>
           </button>
         )}
@@ -3349,62 +3349,23 @@ export function Studio() {
         ) : null}
       </section>
 
-      {(liveFiles.length > 0 || jobs.length > 0 || likes.length > 0) && tab !== "errors" && tab !== "library" ? (
+      {tab === "combine" && (likes.length > 0 || jobs.some((j) => j.resultDataUrl)) ? (
         <div className="flex gap-2 overflow-x-auto border-b border-line px-3 py-2 md:px-5">
-          <p className="flex h-16 shrink-0 items-center text-[11px] text-subtle">Results</p>
+          <p className="flex h-16 shrink-0 items-center text-[11px] text-subtle">This sitting</p>
           {likes.map((l) => (
             <button
               key={l.id}
               type="button"
               className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg ring-2 ring-accent"
-              title="Enlarge"
+              title="Add to Combine"
               onClick={() => {
-                if (tab === "combine" || mode === "ref2i") {
-                  void placeLibraryStill({ src: l.src, name: "liked.png", folder: "output" }, "add");
-                  return;
-                }
-                setZoom({ src: l.src, kind: "image", name: "liked" });
+                void placeLibraryStill({ src: l.src, name: "liked.png", folder: "output" }, "add");
               }}
             >
               <img src={l.src} alt="" className="size-full object-cover" />
               <Heart className="absolute bottom-1 right-1 size-3 fill-accent text-accent" />
             </button>
           ))}
-          {liveFiles.filter((f) => !jobs.some((j) => stillKey(j.resultName) === stillKey(f.name))).map((f) => {
-            const src = `/forge-media?folder=${f.folder}&name=${encodeURIComponent(f.name)}`;
-            const vid = isVideoName(f.name);
-            return (
-              <button
-                key={`${f.folder}-${f.name}-${f.mtime}`}
-                type="button"
-                draggable
-                className="relative h-16 w-16 shrink-0 cursor-grab overflow-hidden rounded-lg bg-raised active:cursor-grabbing"
-                title={tab === "combine" || mode === "ref2i" ? "Tap to add to Combine" : "Drag onto Add photo, or tap to enlarge"}
-                onDragStart={(e) => dragForgeStill(e, { src, name: f.name, folder: f.folder })}
-                onClick={() => {
-                  if (!vid && (tab === "combine" || mode === "ref2i")) {
-                    void placeLibraryStill({ src, name: f.name, folder: f.folder }, "add");
-                    return;
-                  }
-                  if (!vid && tab === "video") {
-                    loadForVideo(src, f.name, f.folder);
-                    return;
-                  }
-                  setZoom({ src, kind: vid ? "video" : "image", name: f.name });
-                  if (!vid) void adoptDroppedStill(src);
-                }}
-              >
-                {vid ? (
-                  <ForgeClip src={src} muted className="size-full object-cover" />
-                ) : (
-                  <img src={src} alt="" className="size-full object-cover" />
-                )}
-                <span className="absolute bottom-0 left-0 right-0 bg-bg/70 px-0.5 text-[8px] text-muted">
-                  {f.folder === "input" ? "in" : "out"}
-                </span>
-              </button>
-            );
-          })}
           {jobs.flatMap((job) => {
             const items =
               job.batch && job.batch.length > 1
@@ -3442,10 +3403,6 @@ export function Studio() {
                       { src: item.src, name: item.name, folder: item.job.resultFolder },
                       "add",
                     );
-                    return;
-                  }
-                  if (item.kind !== "video" && tab === "video") {
-                    loadForVideo(item.src, item.name, item.job.resultFolder);
                     return;
                   }
                   adoptJob(item.job);
@@ -3705,7 +3662,7 @@ export function Studio() {
               <p className="px-3 pt-2 text-sm text-muted">
                 Combine {media.filter((m) => m.kind === "image").length} of 5 photos into one new still.
                 {media.filter((m) => m.kind === "image").length < 2
-                  ? " Tap another photo from Results or Pick from library."
+                  ? " Open Library or drop another photo."
                   : " Type that new scene, then Generate."}
               </p>
               <div className="flex items-start gap-2">
