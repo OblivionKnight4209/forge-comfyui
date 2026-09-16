@@ -43,7 +43,7 @@ export const MODE_META: Record<
   i2i: {
     label: "Edit photo",
     blurb: "Change a still",
-    how: "Put a picture on the left. Fill Take out / Put in / Change. Then Generate. Only that picture is edited. This box is NOT the From text box.",
+    how: "Put a picture on the left. Fill Take out / Put in / Change. Generate inpaints only that region — the rest of the photo stays.",
     needsImage: true,
     needsVideo: false,
     video: false,
@@ -320,6 +320,9 @@ export type ComfyStatus = {
   wildcards: string[];
   taggerClass: string;
   taggerModels: string[];
+  controlnets: string[];
+  hasClipSeg: boolean;
+  hasCanny: boolean;
 };
 
 export function ckptBase(name: string) {
@@ -348,6 +351,36 @@ export function canEditPhoto(name: string) {
   if (!isRealCheckpoint(name)) return false;
   if (/hunyuan3d|triposr|lumina|nextdit|next-dit|svd|wan2|text.encoder|gemma|t5xxl|dit-v2/.test(n)) return false;
   return true;
+}
+
+export function pickInpaintCkpt(current: string, list: string[]): string {
+  const fam = guessArch(current);
+  if (fam === "flux" || fam === "wan") return current;
+  const hits = list.filter((n) => /inpaint/i.test(n) && guessArch(n) === fam && isRealCheckpoint(n));
+  if (/inpaint/i.test(current) && list.includes(current)) return current;
+  return hits[0] || current;
+}
+
+export function controlNetFits(name: string, family: "flux" | "sdxl" | "sd15" | "wan"): boolean {
+  const n = (name || "").toLowerCase();
+  if (!n) return false;
+  if (family === "sd15") return /sd15|1\.5|sd-1|control_v1[01]/i.test(n) && !/xl|illustrious|pony|sdxl/i.test(n);
+  if (family === "sdxl") return /xl|illustrious|pony|sdxl/i.test(n);
+  return false;
+}
+
+export function pickControlNet(
+  list: string[],
+  family: "flux" | "sdxl" | "sd15" | "wan",
+  kind: "tile" | "canny" | "inpaint" | "any" = "tile",
+): string {
+  const pool = (list || []).filter((n) => controlNetFits(n, family));
+  const search = pool.length ? pool : (list || []).filter((n) => family === "sdxl" || family === "sd15");
+  const hit = (re: RegExp) => search.find((n) => re.test(n)) || "";
+  if (kind === "tile") return hit(/tile/i) || hit(/lineart/i) || hit(/canny/i) || "";
+  if (kind === "canny") return hit(/canny/i) || hit(/lineart/i) || "";
+  if (kind === "inpaint") return hit(/inpaint/i) || hit(/tile/i) || hit(/canny/i) || "";
+  return search[0] || "";
 }
 
 export function pickVaeName(family: "flux" | "sdxl" | "sd15", settings: Pick<ComfySettings, "fluxVae" | "wanVae">, vaes: string[]) {

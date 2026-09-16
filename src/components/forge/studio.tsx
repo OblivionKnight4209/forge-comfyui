@@ -85,6 +85,8 @@ import {
   shouldReplaceNegative,
   aspectFromSize,
   pickEditCheckpoint,
+  pickControlNet,
+  pickInpaintCkpt,
   type Job,
   type LoraEntry,
   type MediaRef,
@@ -92,7 +94,7 @@ import {
   type ModelFamily,
 } from "@/lib/forge/types";
 import { PROMPT_FLAVORS, expandPrompt, grokExpand, grokMotion, writeIdeas, writePrompt, isAdult, flattenPrompt, userLead, recoverScene, composeNewScene, isPurpleProse, sceneCore, tokenOverlap, nsfwWanted, isShortSubject, type PromptFlavor } from "@/lib/forge/wildcards";
-import { composeI2iPrompt, expandEditFields } from "@/lib/forge/edit-prompt";
+import { composeI2iPrompt, expandEditFields, inpaintMaskText } from "@/lib/forge/edit-prompt";
 import { isVideoName, mediaMime, withVideoDataUrl } from "@/lib/forge/media-mime";
 import { writeExtreme, writeDarkSet, writeTabooSet, writeHorrorSet, isWashed, NSFW_TYPES, nsfwGroup, writeMenus, WHO_BITS, WHERE_BITS, MORE_BITS, COMIC_BITS, EVIL_BITS, FACE_BITS, BODY_BITS, CLOTHES_BITS, PLACE_BITS, CAM_BITS, LIGHT_BITS } from "@/lib/forge/extreme";
 import { COMIC_LAYOUTS, COMIC_INK, buildComicPrompt, formatComicScript, isPanelScript } from "@/lib/forge/comic";
@@ -401,6 +403,9 @@ export function Studio() {
             wildcards: [],
             taggerClass: "",
             taggerModels: [],
+            controlnets: [],
+            hasClipSeg: false,
+            hasCanny: false,
           });
           if (lastComfyOk.current !== false) {
             logForge(
@@ -2275,6 +2280,21 @@ export function Studio() {
         if (inW && inH) useForge.getState().setAspect(aspectFromSize(inW, inH));
       }
     }
+    if (runMode === "i2i") {
+      const mask = inpaintMaskText({
+        remove: state.editRemove,
+        add: state.editAdd,
+        change: state.editChange,
+        typed: state.prompt,
+      });
+      const ckpts = useForge.getState().comfy?.checkpoints ?? [];
+      const inpaintCkpt = pickInpaintCkpt(settingsNow.checkpoint, ckpts);
+      if (inpaintCkpt && inpaintCkpt !== settingsNow.checkpoint) {
+        settingsNow = { ...settingsNow, checkpoint: inpaintCkpt };
+        logForge("info", "Edit", `Inpaint mix ${inpaintCkpt}`);
+      }
+      if (mask) logForge("info", "Edit", `Inpaint mask “${mask}”`);
+    }
     const api = buildApiWorkflow({
       mode: runMode,
       prompt: finalPrompt,
@@ -2297,6 +2317,25 @@ export function Studio() {
       lean: Boolean(opts?.leanVideo),
       inputW: inW,
       inputH: inH,
+      maskText:
+        runMode === "i2i"
+          ? inpaintMaskText({
+              remove: state.editRemove,
+              add: state.editAdd,
+              change: state.editChange,
+              typed: state.prompt,
+            })
+          : "",
+      controlnetName:
+        runMode === "i2i"
+          ? pickControlNet(
+              useForge.getState().comfy?.controlnets ?? [],
+              fam === "sd15" ? "sd15" : "sdxl",
+              "tile",
+            )
+          : "",
+      hasClipSeg: Boolean(useForge.getState().comfy?.hasClipSeg),
+      hasCanny: Boolean(useForge.getState().comfy?.hasCanny),
     });
     const ui = apiToUiWorkflow(api, `Forge ${MODE_META[runMode].label}`);
     const job: Job = {
@@ -2513,7 +2552,7 @@ export function Studio() {
     <div className="flex min-h-dvh flex-col bg-bg pb-8 text-fg">
       <header className="flex flex-wrap items-center gap-2 px-3 py-3 md:gap-3 md:px-6">
         <p className="text-[15px] font-medium tracking-tight">Forge</p>
-        <span className="text-[11px] tabular-nums text-subtle">217</span>
+        <span className="text-[11px] tabular-nums text-subtle">218</span>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {meta.video ? (
             <select

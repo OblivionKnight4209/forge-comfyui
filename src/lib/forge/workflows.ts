@@ -1,5 +1,5 @@
 import type { Aspect, ComfySettings, Job, LoraEntry, Mode, ModelFamily } from "./types";
-import { ASPECT_SIZE, guessArch, guessLoraLane, i2iCanvasSize, isHighNoiseUnet, isLightningUnet, isLowNoiseUnet, isNotALora, isWan14b, isWan5b, loraFitsCheckpoint, loraNameKeys, promptNameWords, sizeForFamily, wordHitsLoraName } from "./types";
+import { ASPECT_SIZE, guessArch, guessLoraLane, i2iCanvasSize, isHighNoiseUnet, isLightningUnet, isLowNoiseUnet, isNotALora, isWan14b, isWan5b, loraFitsCheckpoint, loraNameKeys, pickInpaintCkpt, promptNameWords, sizeForFamily, wordHitsLoraName } from "./types";
 
 export type ApiNode = {
   class_type: string;
@@ -26,6 +26,10 @@ type BuildArgs = {
   lean?: boolean;
   inputW?: number;
   inputH?: number;
+  maskText?: string;
+  controlnetName?: string;
+  hasClipSeg?: boolean;
+  hasCanny?: boolean;
 };
 
 function node(
@@ -418,6 +422,173 @@ function sdxlStill(args: BuildArgs): ApiPrompt {
   return prompt;
 }
 
+/** Grok-style photo edit: mask the change, hold the rest with ControlNet, composite back. */
+function sdxlInpaint(args: BuildArgs): ApiPrompt {
+  const s = args.settings;
+  const ckptWant = s.checkpoint || s.sdxlCheckpoint;
+  const arch = s.stillFamily === "sd15" ? "sd15" : "sdxl";
+  const ckpt = pickInpaintCkpt(ckptWant, [ckptWant, s.sdxlCheckpoint].filter(Boolean));
+  const inpaintWeights = /inpaint/i.test(ckpt);
+  const { w, h } =
+    args.inputW && args.inputH
+      ? i2iCanvasSize(args.inputW, args.inputH, arch)
+      : sizeForFamily(arch, args.aspect);
+  const prompt: ApiPrompt = {
+    "1": node("CheckpointLoaderSimple", { ckpt_name: ckpt || ckptWant }, "Checkpoint"),
+  };
+  let clip: [string, number] = ["1", 1];
+  const skip = s.clipSkip || 0;
+  if (skip >= 2 && arch === "sd15") {
+    prompt["4"] = node(
+      "CLIPSetLastLayer",
+      { clip: ["1", 1], stop_at_clip_layer: -Math.min(skip, 12) },
+      "CLIP skip",
+    );
+    clip = ["4", 0];
+  }
+  const chained = chainLoras(
+    args.loras.filter((l) => loraFitsCheckpoint(l.filename, arch, ckpt || ckptWant)),
+    ["1", 0],
+    clip,
+  );
+  Object.assign(prompt, chained.nodes);
+  const model = chained.model;
+  clip = chained.clip ?? clip;
+  const pos = encodeLong(prompt, "10", 70, args.prompt, clip, "Positive");
+  const neg = encodeLong(prompt, "11", 100, args.negative, clip, "Negative");
+  let vae: [string, number] = ["1", 2];
+  const wantVae = (args.vaeName || "").trim();
+  if (wantVae && !/wan/i.test(wantVae)) {
+    prompt["3"] = node("VAELoader", { vae_name: wantVae }, "VAE");
+    vae = ["3", 0];
+  }
+  prompt["20"] = node("LoadImage", { image: "forge_input_0.png" }, "Input still");
+  prompt["22"] = node(
+    "ImageScale",
+    {
+      image: ["20", 0],
+      width: w,
+      height: h,
+      upscale_method: "lanczos",
+      crop: args.inputW ? "disabled" : "center",
+    },
+    "Fit size",
+  );
+
+  let condPos: [string, number] = pos;
+  let condNeg: [string, number] = neg;
+  const cn = (args.controlnetName || "").trim();
+  if (cn) {
+    prompt["26"] = node("ControlNetLoader", { control_net_name: cn }, "ControlNet");
+    let cnImage: [string, number] = ["22", 0];
+    if (args.hasCanny && /canny/i.test(cn)) {
+      prompt["24"] = node(
+        "Canny",
+        { image: ["22", 0], low_threshold: 0.4, high_threshold: 0.8 },
+        "Canny",
+      );
+      cnImage = ["24", 0];
+    }
+    prompt["27"] = node(
+      "ControlNetApplyAdvanced",
+      {
+        positive: pos,
+        negative: neg,
+        control_net: ["26", 0],
+        image: cnImage,
+        strength: /tile/i.test(cn) ? 0.65 : 0.55,
+        start_percent: 0,
+        end_percent: 0.85,
+      },
+      "Hold structure",
+    );
+    condPos = ["27", 0];
+    condNeg = ["27", 1];
+  }
+
+  const maskPhrase = (args.maskText || "").trim();
+  const useClipSeg = Boolean(maskPhrase && args.hasClipSeg);
+  if (useClipSeg) {
+    prompt["50"] = node(
+      "CLIPSeg",
+      {
+        image: ["22", 0],
+        text: maskPhrase,
+        blur: 7,
+        threshold: 0.35,
+        dilation_factor: 4,
+      },
+      "Edit mask",
+    );
+    prompt["51"] = node(
+      "GrowMask",
+      { mask: ["50", 0], expand: 12, tapered_corners: true },
+      "Grow mask",
+    );
+  } else {
+    prompt["50"] = node("SolidMask", { value: 1, width: w, height: h }, "Full mask");
+    prompt["51"] = node(
+      "FeatherMask",
+      { mask: ["50", 0], left: 24, top: 24, right: 24, bottom: 24 },
+      "Feather",
+    );
+  }
+
+  const denoise = inpaintWeights || useClipSeg ? Math.max(0.72, Math.min(1, args.denoise >= 0.95 ? 1 : args.denoise)) : args.denoise;
+  if (inpaintWeights) {
+    prompt["21"] = node(
+      "VAEEncodeForInpaint",
+      { pixels: ["22", 0], vae, mask: ["51", 0], grow_mask_by: useClipSeg ? 8 : 6 },
+      "Inpaint encode",
+    );
+  } else {
+    prompt["21"] = node("VAEEncode", { pixels: ["22", 0], vae }, "Encode");
+    prompt["23"] = node(
+      "SetLatentNoiseMask",
+      { samples: ["21", 0], mask: ["51", 0] },
+      "Noise mask",
+    );
+  }
+  const latent: [string, number] = inpaintWeights ? ["21", 0] : ["23", 0];
+  const sampler = s.sampler || (arch === "sd15" ? "euler_ancestral" : "dpmpp_2m");
+  const scheduler = s.scheduler || (arch === "sd15" ? "normal" : "karras");
+  prompt["30"] = node(
+    "KSampler",
+    {
+      seed: args.seed,
+      steps: s.steps || 28,
+      cfg: s.cfg || (arch === "sd15" ? 7 : 5),
+      sampler_name: sampler,
+      scheduler,
+      denoise,
+      model,
+      positive: condPos,
+      negative: condNeg,
+      latent_image: latent,
+    },
+    "Sampler",
+  );
+  prompt["31"] = node("VAEDecode", { samples: ["30", 0], vae }, "Decode");
+  let image: [string, number] = ["31", 0];
+  if (useClipSeg) {
+    prompt["37"] = node(
+      "ImageCompositeMasked",
+      {
+        destination: ["22", 0],
+        source: ["31", 0],
+        mask: ["51", 0],
+        x: 0,
+        y: 0,
+        resize_source: true,
+      },
+      "Keep unmasked",
+    );
+    image = ["37", 0];
+  }
+  prompt["32"] = node("SaveImage", { filename_prefix: "Forge", images: image }, "Save");
+  return prompt;
+}
+
 function videoSize(aspect: Aspect, unet = "", lean = false): { w: number; h: number } {
   const five = isWan5b(unet);
   const heavy = isWan14b(unet);
@@ -750,7 +921,9 @@ export function buildApiWorkflow(args: BuildArgs): ApiPrompt {
     ? wanVideo(args)
     : args.settings.stillLoader === "flux-unet" || guessArch(args.settings.checkpoint || args.settings.fluxUnet || "") === "flux"
       ? fluxStill(args)
-      : sdxlStill(args);
+      : args.mode === "i2i"
+        ? sdxlInpaint(args)
+        : sdxlStill(args);
   return stripBrokenLoraNodes(graph);
 }
 

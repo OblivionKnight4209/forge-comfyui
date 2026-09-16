@@ -421,6 +421,10 @@ export function scanDiskModels() {
     wildcards: scanRel("wildcards", /\.txt$/i).map((f) =>
       f.replace(/\.txt$/i, "").replace(/\\/g, "/"),
     ),
+    controlnets: [
+      ...scanRel("models/controlnet", weights),
+      ...scanRel("models/controlnets", weights),
+    ],
   };
 }
 
@@ -531,6 +535,9 @@ export async function probeComfy(baseUrl: string): Promise<ComfyStatus> {
     wildcards: disk.wildcards,
     taggerClass: wd14OnDisk() ? "WD14Tagger|pysssss" : "",
     taggerModels: [],
+    controlnets: disk.controlnets ?? [],
+    hasClipSeg: false,
+    hasCanny: false,
   };
   try {
     const alive = await pingComfy(baseUrl);
@@ -541,10 +548,11 @@ export async function probeComfy(baseUrl: string): Promise<ComfyStatus> {
         ...empty,
       };
     }
-    const [ckptFolder, loraFolder, unetFolder] = await Promise.all([
+    const [ckptFolder, loraFolder, unetFolder, cnFolder] = await Promise.all([
       listComfyFolder(baseUrl, "checkpoints"),
       listComfyFolder(baseUrl, "loras"),
       listComfyFolder(baseUrl, "diffusion_models"),
+      listComfyFolder(baseUrl, "controlnet"),
     ]);
     let info: Record<string, Record<string, unknown>> = {};
     if (infoCache && Date.now() - infoCache.at < 120_000) {
@@ -588,6 +596,16 @@ export async function probeComfy(baseUrl: string): Promise<ComfyStatus> {
     const checkpoints = [...new Set([...ckptFolder, ...widgetCkpts, ...diskCkpts])].filter((n) =>
       isRealCheckpoint(n),
     );
+    const controlnets = [
+      ...new Set([
+        ...cnFolder,
+        ...widgetOptions(info.ControlNetLoader, "control_net_name"),
+        ...widgetOptions(info.ControlNetLoaderAdvanced, "control_net_name"),
+        ...(disk.controlnets ?? []),
+      ]),
+    ];
+    const hasClipSeg = Boolean(info.CLIPSeg || info.BatchCLIPSeg);
+    const hasCanny = Boolean(info.Canny || info.CannyEdgePreprocessor);
     return {
       ok: true,
       message: `ComfyUI · ${checkpoints.length} checkpoints`,
@@ -599,6 +617,9 @@ export async function probeComfy(baseUrl: string): Promise<ComfyStatus> {
       wildcards: disk.wildcards,
       taggerClass,
       taggerModels,
+      controlnets,
+      hasClipSeg,
+      hasCanny,
     };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "unreachable";

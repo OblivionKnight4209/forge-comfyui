@@ -60,3 +60,26 @@ export function composeI2iPrompt(
   if (t) return [t, ...extra, identity, lock].filter(Boolean).join(". ");
   return buildEditPrompt({ remove, add, change, scan });
 }
+
+/** CLIPSeg / inpaint mask phrase from Take out / Put in / Change. */
+export function inpaintMaskText(fields: { remove?: string; add?: string; change?: string; typed?: string }): string {
+  const remove = (fields.remove ?? "").replace(/\s+/g, " ").trim();
+  const add = (fields.add ?? "").replace(/\s+/g, " ").trim();
+  const change = (fields.change ?? "").replace(/\s+/g, " ").trim();
+  const typed = (fields.typed ?? "").replace(/\s+/g, " ").trim();
+  if (remove) return remove.split(",")[0]!.trim().slice(0, 48);
+  if (change) {
+    const first = change.split(",")[0]!.trim();
+    const noun = first.replace(/^(make|turn|paint|dye|swap)\s+/i, "").slice(0, 48);
+    return noun || first.slice(0, 48);
+  }
+  if (add) {
+    if (/\b(hat|crown|helmet|hood|cap|tiara)\b/i.test(add)) return "head, hair";
+    if (/\b(tattoo|scar|blood)\b/i.test(add)) return "skin, body";
+    if (/\b(wing|tail|horn)\b/i.test(add)) return "person, back";
+    return "person";
+  }
+  const m = typed.match(/\b(?:remove|take off|delete|erase)\s+(.{2,40}?)(?:\.|$|,)/i);
+  if (m?.[1]) return m[1].replace(/\b(the|a|an|her|his|their)\s+/gi, "").trim().slice(0, 48);
+  return "";
+}

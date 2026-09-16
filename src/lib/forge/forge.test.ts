@@ -41,6 +41,8 @@ import {
   aspectFromSize,
   i2iCanvasSize,
   pickEditCheckpoint,
+  pickControlNet,
+  pickInpaintCkpt,
 } from "./types.ts";
 import {
   buildApiWorkflow,
@@ -62,7 +64,7 @@ import { pickBrainModel, cleanBrainOut, brainSystem } from "./brain.ts";
 import { designClipAudio, ensureVoice } from "./clip-sound.ts";
 import { embedWorkflowPng, readPngText, seedFromPngText, seedFromBytes } from "./png.ts";
 import { scanFromTags, boxesFromTags, mergeScan } from "./detector.ts";
-import { buildEditPrompt, composeI2iPrompt, expandEditFields } from "./edit-prompt.ts";
+import { buildEditPrompt, composeI2iPrompt, expandEditFields, inpaintMaskText } from "./edit-prompt.ts";
 import type { ComfySettings, LoraEntry, Mode } from "./types.ts";
 
 function settings(over: Partial<ComfySettings> = {}): ComfySettings {
@@ -287,6 +289,80 @@ describe("i2i graph", () => {
     rewireLoadImages(g, { "forge_input_0.png": "Comfy_upload.png" });
     const load = Object.values(g).find((n) => n.class_type === "LoadImage");
     assert.equal(load?.inputs.image, "Comfy_upload.png");
+  });
+  it("i2i uses inpaint graph: noise mask, not a full redraw", () => {
+    const g = graph({ mode: "i2i", denoise: 0.42, imageCount: 1 });
+    assert.ok(classes(g).includes("SetLatentNoiseMask"));
+    assert.ok(classes(g).includes("SolidMask") || classes(g).includes("CLIPSeg"));
+    assert.ok(!classes(g).includes("EmptyLatentImage"));
+    assert.equal(validateApiGraph(g).length, 0);
+  });
+  it("remove jacket uses CLIPSeg + composite", () => {
+    const g = graph({
+      mode: "i2i",
+      denoise: 0.85,
+      imageCount: 1,
+      maskText: "jacket",
+      hasClipSeg: true,
+    });
+    assert.ok(classes(g).includes("CLIPSeg"));
+    assert.ok(classes(g).includes("GrowMask"));
+    assert.ok(classes(g).includes("ImageCompositeMasked"));
+    const seg = Object.values(g).find((n) => n.class_type === "CLIPSeg");
+    assert.equal(seg?.inputs.text, "jacket");
+    assert.equal(validateApiGraph(g).length, 0);
+  });
+  it("tile ControlNet holds the photo", () => {
+    const g = graph({
+      mode: "i2i",
+      denoise: 0.42,
+      imageCount: 1,
+      controlnetName: "illustriousXLTile_v10.safetensors",
+    });
+    assert.ok(classes(g).includes("ControlNetLoader"));
+    assert.ok(classes(g).includes("ControlNetApplyAdvanced"));
+    const cn = Object.values(g).find((n) => n.class_type === "ControlNetLoader");
+    assert.equal(cn?.inputs.control_net_name, "illustriousXLTile_v10.safetensors");
+    assert.equal(validateApiGraph(g).length, 0);
+  });
+  it("inpaint checkpoint uses VAEEncodeForInpaint", () => {
+    const g = graph({
+      mode: "i2i",
+      denoise: 1,
+      imageCount: 1,
+      maskText: "shirt",
+      hasClipSeg: true,
+      settings: settings({ checkpoint: "illustriousxlV01_inpainting.safetensors" }),
+    });
+    assert.ok(classes(g).includes("VAEEncodeForInpaint"));
+    assert.ok(!classes(g).includes("SetLatentNoiseMask"));
+    assert.equal(validateApiGraph(g).length, 0);
+  });
+});
+
+describe("inpaint helpers", () => {
+  it("mask text comes from Take out", () => {
+    assert.equal(inpaintMaskText({ remove: "jacket" }), "jacket");
+    assert.equal(inpaintMaskText({ add: "red hat" }), "head, hair");
+    assert.match(inpaintMaskText({ typed: "remove the glasses" }), /glasses/);
+  });
+  it("picks XL tile for Illustrious, not SD1.5 canny", () => {
+    const list = [
+      "controlnetPreTrained_cannyV10.safetensors",
+      "illustriousXLTile_v10.safetensors",
+      "illustriousXLLineart_v10.safetensors",
+    ];
+    assert.equal(pickControlNet(list, "sdxl", "tile"), "illustriousXLTile_v10.safetensors");
+  });
+  it("picks same-family inpaint weights", () => {
+    assert.equal(
+      pickInpaintCkpt("DasiwaIllustriousAnime_epitaphecstasy.safetensors", [
+        "DasiwaIllustriousAnime_epitaphecstasy.safetensors",
+        "illustriousxlV01_inpainting.safetensors",
+        "uberRealisticPornMerge_v23Inpainting.safetensors",
+      ]),
+      "illustriousxlV01_inpainting.safetensors",
+    );
   });
 });
 
