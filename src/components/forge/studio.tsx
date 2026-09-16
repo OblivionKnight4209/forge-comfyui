@@ -2136,9 +2136,9 @@ export function Studio() {
 
   return (
     <div className="flex min-h-dvh flex-col bg-bg pb-8 text-fg">
-      <header className="flex items-center gap-3 px-4 py-3 md:px-6">
+      <header className="flex flex-wrap items-center gap-2 px-3 py-3 md:gap-3 md:px-6">
         <p className="text-[15px] font-medium tracking-tight">Forge</p>
-        <span className="text-[11px] tabular-nums text-subtle">201</span>
+        <span className="text-[11px] tabular-nums text-subtle">202</span>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {meta.video ? (
             <select
@@ -4009,7 +4009,7 @@ export function Studio() {
         <SheetContent title="Scan" side="bottom">
           <DetectorCard
             scan={scan}
-            src={stageSrc}
+            src={stageSrc ?? undefined}
             showBoxes={showBoxes}
             onToggleBoxes={(v) => useForge.getState().setShowBoxes(v)}
             onScan={() => {

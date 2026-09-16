@@ -1691,3 +1691,62 @@ describe("comic page builder", () => {
     assert.match(page, /not a photograph/i);
   });
 });
+
+describe("full regression", () => {
+  it("t2i XL graph has checkpoint + sampler + save", () => {
+    const g = graph({ mode: "t2i" });
+    const c = classes(g);
+    assert.ok(c.includes("CheckpointLoaderSimple"));
+    assert.ok(c.includes("KSampler"));
+    assert.ok(c.includes("SaveImage") || c.includes("PreviewImage") || c.some((x) => /Save/i.test(x)));
+    const v = validateApiGraph(g);
+    assert.equal(v.length, 0, v.join("; "));
+  });
+  it("ref2i stitches 2+ stills", () => {
+    const g = graph({ mode: "ref2i", imageCount: 3, denoise: 0.76 });
+    assert.ok(classes(g).includes("ImageStitch"));
+    assert.ok(classes(g).includes("LoadImage"));
+    assert.ok(classes(g).includes("VAEEncode"));
+  });
+  it("1.5 mix does not load XL LoRAs", () => {
+    assert.equal(loraFitsLane("alice_xl.safetensors", "CuteKittenMix.safetensors"), false);
+    assert.equal(loraFitsLane("add_detail.safetensors", "CuteKittenMix.safetensors"), true);
+    assert.equal(loraFitsLane("Hestia (DanMachi) Illustrious v4.safetensors", "CuteKittenMix.safetensors"), false);
+    assert.equal(loraFitsLane("Hestia (DanMachi) Illustrious v4.safetensors", "DasiwaIllustriousAnime.safetensors"), true);
+  });
+  it("3:4 comic page has a size", () => {
+    assert.ok(sizeForFamily("sdxl", "3:4").h > sizeForFamily("sdxl", "3:4").w);
+  });
+  it("WAN i2v loads a still", () => {
+    const g = graph({
+      mode: "i2v",
+      imageCount: 1,
+      hasVideo: false,
+      settings: settings({
+        wanUnet: "wan2.1_i2v_480p_14B_fp16.safetensors",
+        wanVae: "wan_2.1_vae.safetensors",
+        wanClip: "umt5_xxl_fp8.safetensors",
+      }),
+    });
+    assert.ok(classes(g).includes("LoadImage") || classes(g).some((x) => /Load/i.test(x)));
+  });
+  it("flattenPrompt keeps a short scene", () => {
+    const t = flattenPrompt("a red fox in snow", 1);
+    assert.match(t, /red fox/i);
+  });
+  it("SFW expand does not inject sex acts", () => {
+    const t = grokExpand({
+      typed: "a cat fighting a dog",
+      files: DEFAULT_WILDCARDS,
+      seed: 3,
+      family: "sdxl",
+      checkpoint: "DasiwaIllustrious.safetensors",
+      nsfwMode: false,
+    });
+    assert.doesNotMatch(t, /ahegao|gangbang|spitroast|masturbat/i);
+  });
+  it("batch size 4 is stored on settings", () => {
+    const s = settings({ batchSize: 4 });
+    assert.equal(s.batchSize, 4);
+  });
+});

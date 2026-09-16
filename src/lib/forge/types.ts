@@ -210,9 +210,9 @@ export type Job = {
   log?: string;
 };
 
-export type Aspect = "1:1" | "16:9" | "9:16" | "3:2" | "2:3" | "4:3" | "21:9";
+export type Aspect = "1:1" | "16:9" | "9:16" | "3:2" | "2:3" | "4:3" | "3:4" | "21:9";
 
-export const ASPECTS: Aspect[] = ["1:1", "16:9", "9:16", "3:2", "2:3", "4:3", "21:9"];
+export const ASPECTS: Aspect[] = ["1:1", "16:9", "9:16", "3:2", "2:3", "4:3", "3:4", "21:9"];
 
 export const ASPECT_SIZE: Record<Aspect, { w: number; h: number }> = {
   "1:1": { w: 1024, h: 1024 },
@@ -221,6 +221,7 @@ export const ASPECT_SIZE: Record<Aspect, { w: number; h: number }> = {
   "3:2": { w: 1216, h: 832 },
   "2:3": { w: 832, h: 1216 },
   "4:3": { w: 1152, h: 896 },
+  "3:4": { w: 896, h: 1152 },
   "21:9": { w: 1536, h: 640 },
 };
 

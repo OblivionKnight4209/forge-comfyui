@@ -999,7 +999,7 @@ function whichBin(cmd: string) {
 function latestForgeClip(preferName: string): string | null {
   const hit = preferName ? resolveComfyMedia("output", preferName) : null;
   if (hit) return hit;
-  let best: { p: string; t: number } | null = null;
+  const found = { p: "", t: 0 };
   const cutoff = Date.now() - 15 * 60 * 1000;
   for (const root of comfyRoots()) {
     const dir = path.join(root, "output");
@@ -1017,7 +1017,10 @@ function latestForgeClip(preferName: string): string | null {
         else if (/^Forge.*\.(mp4|webm|mov|m4v)$/i.test(ent.name) && !/_sound/i.test(ent.name)) {
           try {
             const t = fs.statSync(p).mtimeMs;
-            if (t >= cutoff && (!best || t > best.t)) best = { p, t };
+            if (t >= cutoff && t > found.t) {
+              found.p = p;
+              found.t = t;
+            }
           } catch {
             /* skip */
           }
@@ -1026,7 +1029,7 @@ function latestForgeClip(preferName: string): string | null {
     };
     walk(dir, 0);
   }
-  return best?.p || null;
+  return found.p || null;
 }
 
 /** Mix scene SFX + girl/dude voices onto a silent WAN mp4. */
