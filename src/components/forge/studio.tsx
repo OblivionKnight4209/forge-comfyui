@@ -12,6 +12,7 @@ import {
   Volume2,
   Heart,
   Images,
+  FolderOpen,
   X,
   Play,
 } from "lucide-react";
@@ -163,10 +164,12 @@ function logForge(level: "info" | "warn" | "error", source: string, message: str
 export function Studio() {
   const [busy, setBusy] = useState(false);
   const [sheet, setSheet] = useState<
-    null | "settings" | "loras" | "wild" | "graph" | "scan" | "library" | "story" | "history"
+    null | "settings" | "loras" | "wild" | "graph" | "scan" | "story" | "history"
   >(null);
   const [library, setLibrary] = useState<{ folder: "input" | "output"; name: string; mtime: number }[]>([]);
-  const [libraryAll, setLibraryAll] = useState(true);
+  const [libraryFolder, setLibraryFolder] = useState<"all" | "input" | "output">("all");
+  const [libraryQ, setLibraryQ] = useState("");
+  const [libraryReturn, setLibraryReturn] = useState<"image" | "combine" | "comic" | "video">("image");
   const [showSource, setShowSource] = useState(false);
   const [liveFiles, setLiveFiles] = useState<{ folder: "input" | "output"; name: string; mtime: number }[]>([]);
   const [showShow, setShowShow] = useState(false);
@@ -182,7 +185,7 @@ export function Studio() {
     models: [],
     message: "Ollama off",
   });
-  const [tab, setTab] = useState<"image" | "combine" | "comic" | "video" | "errors" | "mixes">("image");
+  const [tab, setTab] = useState<"image" | "combine" | "comic" | "video" | "errors" | "mixes" | "library">("image");
   const [comicLayout, setComicLayout] = useState("2x2");
   const [comicInk, setComicInk] = useState("manga-ink");
   const [mixPick, setMixPick] = useState<string[]>([]);
@@ -737,8 +740,33 @@ export function Studio() {
     loadForEdit(dataUrl, still.name, still.folder);
   }
 
+  function useLibraryFile(
+    f: { folder: "input" | "output"; name: string },
+    action: "edit" | "combine" | "video" | "zoom",
+  ) {
+    const src = `/forge-media?folder=${f.folder}&name=${encodeURIComponent(f.name)}`;
+    const vid = isVideoName(f.name);
+    if (action === "zoom" || vid) {
+      setZoom({ src, kind: vid ? "video" : "image", name: f.name });
+      return;
+    }
+    if (action === "combine") {
+      void placeLibraryStill({ src, name: f.name, folder: f.folder }, "add");
+      setTab("combine");
+      return;
+    }
+    if (action === "video") {
+      loadForVideo(src, f.name, f.folder);
+      setTab("video");
+      return;
+    }
+    void loadForEdit(src, f.name, f.folder);
+    setTab("image");
+  }
+
   function openLibrary() {
-    setSheet("library");
+    if (tab === "video" || tab === "combine" || tab === "comic" || tab === "image") setLibraryReturn(tab);
+    setTab("library");
     void listComfyRecentFn({ data: { all: true } })
       .then(setLibrary)
       .catch(() => setLibrary([]));
@@ -793,10 +821,7 @@ export function Studio() {
     }
     if (n < 2) {
       void listComfyRecentFn({ data: { all: true } })
-        .then((list) => {
-          setLibrary(list);
-          if (list.length) setSheet("library");
-        })
+        .then(setLibrary)
         .catch(() => setLibrary([]));
     }
   }
@@ -2158,7 +2183,7 @@ export function Studio() {
     <div className="flex min-h-dvh flex-col bg-bg pb-8 text-fg">
       <header className="flex flex-wrap items-center gap-2 px-3 py-3 md:gap-3 md:px-6">
         <p className="text-[15px] font-medium tracking-tight">Forge</p>
-        <span className="text-[11px] tabular-nums text-subtle">204</span>
+        <span className="text-[11px] tabular-nums text-subtle">205</span>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {meta.video ? (
             <select
@@ -2310,13 +2335,17 @@ export function Studio() {
 
       <div className="flex flex-col gap-1 px-2 md:px-4">
         <div className="flex items-center gap-0.5">
-          {(["image", "video", "combine", "comic", "mixes"] as const).map((g) => (
+          {(["image", "video", "combine", "comic", "library", "mixes"] as const).map((g) => (
             <button
               key={g}
               type="button"
               onClick={() => {
                 if (g === "combine") {
                   beginCombine();
+                  return;
+                }
+                if (g === "library") {
+                  openLibrary();
                   return;
                 }
                 setTab(g);
@@ -2389,7 +2418,9 @@ export function Studio() {
                     ? "Comic"
                     : g === "video"
                       ? "Video"
-                      : "All ckpts"}
+                      : g === "library"
+                        ? "Library"
+                        : "All ckpts"}
             </button>
           ))}
         </div>
@@ -2478,9 +2509,115 @@ export function Studio() {
       </div>
 
       {tab === "errors" ? <ErrorsPanel /> : null}
+      {tab === "library" ? (
+        <section className="min-h-0 flex-1 overflow-auto px-3 py-3 md:px-5">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <FolderOpen className="size-4 text-muted" />
+            <p className="text-sm text-fg">Comfy files</p>
+            <p className="text-xs text-subtle">{library.length} in input + output</p>
+            {(["all", "output", "input"] as const).map((f) => (
+              <button
+                key={f}
+                type="button"
+                className={cn(
+                  "h-8 rounded-full px-3 text-xs",
+                  libraryFolder === f ? "bg-fg text-bg" : "bg-raised text-subtle hover:text-fg",
+                )}
+                onClick={() => setLibraryFolder(f)}
+              >
+                {f === "all" ? "All" : f === "output" ? "Output" : "Input"}
+              </button>
+            ))}
+            <Input
+              value={libraryQ}
+              onChange={(e) => setLibraryQ(e.target.value)}
+              placeholder="Find a file"
+              className="h-8 w-40"
+            />
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              onClick={() => {
+                void listComfyRecentFn({ data: { all: true } }).then(setLibrary).catch(() => setLibrary([]));
+              }}
+            >
+              Refresh
+            </Button>
+            <p className="w-full text-xs text-muted">
+              Tap a still to enlarge. Edit / Combine / Play send it to that tab.
+            </p>
+          </div>
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8">
+            {library
+              .filter((f) => (libraryFolder === "all" ? true : f.folder === libraryFolder))
+              .filter((f) => !libraryQ.trim() || f.name.toLowerCase().includes(libraryQ.trim().toLowerCase()))
+              .map((f) => {
+                const src = `/forge-media?folder=${f.folder}&name=${encodeURIComponent(f.name)}`;
+                const vid = isVideoName(f.name);
+                return (
+                  <div key={`${f.folder}-${f.name}`} className="group relative overflow-hidden rounded-xl bg-raised">
+                    <button
+                      type="button"
+                      draggable
+                      className="block w-full cursor-grab active:cursor-grabbing"
+                      onDragStart={(e) => dragForgeStill(e, { src, name: f.name, folder: f.folder })}
+                      onClick={() => {
+                        if (libraryReturn === "combine") useLibraryFile(f, "combine");
+                        else if (libraryReturn === "video") useLibraryFile(f, "video");
+                        else useLibraryFile(f, "zoom");
+                      }}
+                      title={f.name}
+                    >
+                      {vid ? (
+                        <ForgeClip src={src} muted className="aspect-square w-full object-cover" />
+                      ) : (
+                        <img src={src} alt={f.name} className="aspect-square w-full object-cover" />
+                      )}
+                    </button>
+                    <span className="absolute left-1 top-1 rounded bg-bg/80 px-1 text-[9px] uppercase text-muted">
+                      {f.folder === "input" ? "in" : "out"}
+                    </span>
+                    <button
+                      type="button"
+                      className="absolute right-1 top-1 flex size-7 items-center justify-center rounded-full bg-danger text-white"
+                      title="Shred"
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        const r = await shredComfyFn({ data: { folder: f.folder, name: f.name } });
+                        if (r.ok) {
+                          setLibrary((prev) => prev.filter((x) => !(x.folder === f.folder && x.name === f.name)));
+                          logForge("info", "Shred", r.message);
+                        } else {
+                          logForge("error", "Shred", r.message);
+                        }
+                      }}
+                    >
+                      <Trash2 className="size-3.5" />
+                    </button>
+                    <div className="absolute inset-x-0 bottom-0 flex gap-0.5 bg-bg/80 p-1 text-[10px]">
+                      <button type="button" className="flex-1 rounded bg-raised px-1 py-0.5 text-fg" onClick={() => useLibraryFile(f, "edit")}>
+                        Edit
+                      </button>
+                      <button type="button" className="flex-1 rounded bg-raised px-1 py-0.5 text-fg" onClick={() => useLibraryFile(f, "combine")}>
+                        Mix
+                      </button>
+                      <button type="button" className="flex-1 rounded bg-raised px-1 py-0.5 text-fg" onClick={() => useLibraryFile(f, "video")}>
+                        Play
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+          {!library.length ? (
+            <p className="py-10 text-center text-sm text-muted">No files yet. Generate something on Image first.</p>
+          ) : null}
+        </section>
+      ) : null}
 
       <section
-        className={cn("forge-stage relative min-h-0 flex-1", tab === "errors" && "hidden")}
+        className={cn("forge-stage relative min-h-0 flex-1", (tab === "errors" || tab === "library") && "hidden")}
         onDragOver={(e) => {
           e.preventDefault();
           e.dataTransfer.dropEffect = "copy";
@@ -2870,7 +3007,7 @@ export function Studio() {
         ) : null}
       </section>
 
-      {(liveFiles.length > 0 || jobs.length > 0 || likes.length > 0) && tab !== "errors" ? (
+      {(liveFiles.length > 0 || jobs.length > 0 || likes.length > 0) && tab !== "errors" && tab !== "library" ? (
         <div className="flex gap-2 overflow-x-auto border-b border-line px-3 py-2 md:px-5">
           <p className="flex h-16 shrink-0 items-center text-[11px] text-subtle">Results</p>
           {likes.map((l) => (
@@ -3111,7 +3248,7 @@ export function Studio() {
       </div>
       ) : null}
 
-      <div className={cn("bg-bg px-3 pb-4 pt-2 md:px-5", tab === "errors" && "hidden")}>
+      <div className={cn("bg-bg px-3 pb-4 pt-2 md:px-5", (tab === "errors" || tab === "library") && "hidden")}>
         <div className="forge-composer relative z-40 mx-auto max-w-3xl rounded-[28px] p-3">
           {mode === "i2i" && tab !== "mixes" ? (
             <div className="space-y-2 px-2 py-2">
@@ -3578,10 +3715,7 @@ export function Studio() {
               type="button"
               variant="secondary"
               size="sm"
-              onClick={() => {
-                setSheet("library");
-                void listComfyRecentFn({ data: { all: true } }).then(setLibrary).catch(() => setLibrary([]));
-              }}
+              onClick={() => openLibrary()}
             >
               Comfy files
             </Button>
@@ -3984,76 +4118,6 @@ export function Studio() {
         </div>
       </div>
 
-      <Sheet open={sheet === "library"} onOpenChange={(o) => !o && setSheet(null)}>
-        <SheetContent title="Comfy input / output" side="bottom">
-          <div className="space-y-3">
-            <p className="text-sm text-muted">
-              {tab === "combine" || mode === "ref2i"
-                ? "Tap a still to add it to Combine. Need 2 to 5. Drag still works too."
-                : tab === "video"
-                  ? "Tap a still to animate it. That photo becomes frame 1."
-                  : "Tap a still to edit it. Drag onto Add photo if you prefer."}
-            </p>
-            {(["output", "input"] as const).map((folder) => (
-              <div key={folder}>
-                <p className="mb-2 text-xs uppercase tracking-wide text-subtle">{folder}</p>
-                <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
-                  {library.filter((f) => f.folder === folder).map((f) => {
-                    const src = `/forge-media?folder=${folder}&name=${encodeURIComponent(f.name)}`;
-                    return (
-                      <div key={`${folder}-${f.name}`} className="relative overflow-hidden rounded-lg bg-raised">
-                        <button
-                          type="button"
-                          draggable
-                          className="block w-full cursor-grab active:cursor-grabbing"
-                          onDragStart={(e) => dragForgeStill(e, { src, name: f.name, folder })}
-                          onClick={() => {
-                            if (tab === "combine" || mode === "ref2i") {
-                              void placeLibraryStill({ src, name: f.name, folder }, "add");
-                              return;
-                            }
-                            if (tab === "video") {
-                              loadForVideo(src, f.name, folder);
-                              setSheet(null);
-                              return;
-                            }
-                            void loadForEdit(src, f.name, f.folder);
-                            setSheet(null);
-                          }}
-                        >
-                          <img src={src} alt={f.name} className="aspect-square w-full object-cover" />
-                        </button>
-                        <button
-                          type="button"
-                          className="absolute right-1 top-1 flex size-7 items-center justify-center rounded-full bg-danger text-white"
-                          title="shred -v -u -n 3"
-                          onClick={async (e) => {
-                            e.stopPropagation();
-                            const r = await shredComfyFn({ data: { folder, name: f.name } });
-                            if (r.ok) {
-                              toast.success("Shredded");
-                              setLibrary((prev) => prev.filter((x) => !(x.folder === folder && x.name === f.name)));
-                              logForge("info", "Shred", r.message);
-                            } else {
-                              toast.error(r.message);
-                              logForge("error", "Shred", r.message);
-                            }
-                          }}
-                        >
-                          <Trash2 className="size-3.5" />
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-                {!library.some((f) => f.folder === folder) ? (
-                  <p className="text-xs text-subtle">Empty</p>
-                ) : null}
-              </div>
-            ))}
-          </div>
-        </SheetContent>
-      </Sheet>
       <Sheet open={sheet === "settings"} onOpenChange={(o) => !o && setSheet(null)}>
         <SheetContent title="Settings" side="right">
           <SettingsForm urls={lanUrls} llm={llm} onOpen={(s) => setSheet(s)} />
