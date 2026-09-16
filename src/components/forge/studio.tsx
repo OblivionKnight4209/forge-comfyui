@@ -2115,7 +2115,7 @@ export function Studio() {
     <div className="flex min-h-dvh flex-col bg-bg pb-8 text-fg">
       <header className="flex items-center gap-3 px-4 py-3 md:px-6">
         <p className="text-[15px] font-medium tracking-tight">Forge</p>
-        <span className="text-[11px] tabular-nums text-subtle">196</span>
+        <span className="text-[11px] tabular-nums text-subtle">197</span>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {meta.video ? (
             <select
@@ -4880,10 +4880,44 @@ function SettingsForm({
   const settings = useForge((s) => s.settings);
   const nsfwMode = useForge((s) => s.nsfwMode);
   const comfy = useForge((s) => s.comfy);
+  const jobs = useForge((s) => s.jobs);
+  const jobCount = useForge((s) => s.jobCount);
   const patch = (p: Partial<typeof settings>) => useForge.getState().setSettings(p);
   const primary = urls[0] ?? "http://YOUR-PC-IP:8080";
+  const running = jobs.filter((j) => j.status === "running").length;
+  const queued = jobs.filter((j) => j.status === "queued").length;
+  const done = jobs.filter((j) => j.status === "done").length;
+  const failed = jobs.filter((j) => j.status === "error").length;
   return (
     <div className="space-y-4">
+      <div>
+        <Label>Jobs</Label>
+        <p className="mt-1 text-xs text-subtle">
+          Lifetime count stays after you close Forge. The strip only keeps the last 40.
+        </p>
+        <div className="mt-2 grid grid-cols-2 gap-2 text-sm sm:grid-cols-5">
+          {[
+            ["All time", String(jobCount || 0)],
+            ["Running", String(running)],
+            ["Queued", String(queued)],
+            ["Done", String(done)],
+            ["Failed", String(failed)],
+          ].map(([k, v]) => (
+            <div key={k} className="rounded-xl bg-raised px-3 py-2">
+              <p className="text-[10px] uppercase tracking-wide text-muted">{k}</p>
+              <p className="text-lg tabular-nums text-fg">{v}</p>
+            </div>
+          ))}
+        </div>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <Button size="sm" variant="secondary" onClick={() => useForge.getState().resetJobCount()}>
+            Zero all-time
+          </Button>
+          <Button size="sm" variant="secondary" onClick={() => useForge.getState().clearJobs()}>
+            Clear last 40
+          </Button>
+        </div>
+      </div>
       <div>
         <Label>Content</Label>
         <p className="mt-1 text-xs text-subtle">SFW fills looks and place only. NSFW fills explicit uncensored for people. Animals stay non-porn unless you type it. Underage always stays in the negative.</p>

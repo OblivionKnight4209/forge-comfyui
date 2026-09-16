@@ -57,6 +57,7 @@ type ForgeState = {
   wildcards: WildcardFile[];
   jobs: Job[];
   activeJobId: string | null;
+  jobCount: number;
   blankStage: boolean;
   settings: ComfySettings;
   comfy: ComfyStatus | null;
@@ -100,6 +101,7 @@ type ForgeState = {
   patchJob: (id: string, patch: Partial<Job>) => void;
   removeJob: (id: string) => void;
   clearJobs: () => void;
+  resetJobCount: () => void;
   setActiveJob: (id: string | null) => void;
   startNew: () => void;
   setSettings: (patch: Partial<ComfySettings>) => void;
@@ -149,6 +151,7 @@ export const useForge = create<ForgeState>()(
       wildcards: DEFAULT_WILDCARDS,
       jobs: [],
       activeJobId: null,
+      jobCount: 0,
       blankStage: false,
       settings: DEFAULT_COMFY,
       comfy: null,
@@ -260,6 +263,7 @@ export const useForge = create<ForgeState>()(
       addJob: (job) =>
         set((s) => ({
           jobs: [job, ...s.jobs].slice(0, 40),
+          jobCount: (s.jobCount || 0) + 1,
           blankStage: false,
           activeJobId:
             MODE_META[s.mode].group === MODE_META[job.mode].group ? job.id : s.activeJobId,
@@ -302,6 +306,7 @@ export const useForge = create<ForgeState>()(
         set({ jobs, activeJobId: active });
       },
       clearJobs: () => set({ jobs: [], activeJobId: null, liveScan: null }),
+      resetJobCount: () => set({ jobCount: 0 }),
       setActiveJob: (id) => set({ activeJobId: id, blankStage: id ? false : get().blankStage }),
       startNew: () =>
         set({
@@ -514,6 +519,7 @@ export const useForge = create<ForgeState>()(
         qualityPick: s.qualityPick,
         nsfwMode: s.nsfwMode,
         blankStage: s.blankStage,
+        jobCount: s.jobCount,
       }),
     },
   ),
