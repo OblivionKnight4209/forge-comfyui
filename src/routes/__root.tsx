@@ -38,7 +38,7 @@ export const Route = createRootRoute({
             <Outlet />
           </TooltipProvider>
         </AuthProvider>
-        <Toaster theme="dark" position="bottom-center" />
+        <Toaster theme="dark" position="top-center" richColors={false} />
         <Scripts />
       </body>
     </html>

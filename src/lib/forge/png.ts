@@ -28,7 +28,10 @@ function concat(parts: Uint8Array[]): Uint8Array {
 
 function latin1(s: string): Uint8Array {
   const b = new Uint8Array(s.length);
-  for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i) & 0xff;
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    b[i] = c < 256 ? c : 0x3f;
+  }
   return b;
 }
 
@@ -63,6 +66,63 @@ export function embedWorkflowPng(
     i = end;
   }
   return concat(chunks);
+}
+
+export function readPngText(png: Uint8Array): Record<string, string> {
+  const out: Record<string, string> = {};
+  let i = 8;
+  while (i + 8 <= png.length) {
+    const len = new DataView(png.buffer, png.byteOffset + i, 4).getUint32(0);
+    const type = String.fromCharCode(png[i + 4]!, png[i + 5]!, png[i + 6]!, png[i + 7]!);
+    const start = i + 8;
+    if (type === "tEXt") {
+      const data = png.slice(start, start + len);
+      const z = data.indexOf(0);
+      if (z > 0) {
+        const key = String.fromCharCode(...data.slice(0, z));
+        out[key] = String.fromCharCode(...data.slice(z + 1));
+      }
+    }
+    i += 12 + len;
+  }
+  return out;
+}
+
+export function seedFromPngText(text: Record<string, string>): { seed?: number; prompt?: string } {
+  let seed: number | undefined;
+  let prompt: string | undefined;
+  if (text.forge_seed && Number.isFinite(Number(text.forge_seed))) seed = Number(text.forge_seed);
+  if (text.forge_prompt) prompt = text.forge_prompt;
+  const raw = text.prompt || text.workflow || "";
+  if (!raw) return { seed, prompt };
+  try {
+    const j = JSON.parse(raw) as Record<string, unknown>;
+    const nodes = (j.prompt && typeof j.prompt === "object" ? j.prompt : j) as Record<
+      string,
+      { class_type?: string; inputs?: Record<string, unknown>; _meta?: { title?: string } }
+    >;
+    for (const n of Object.values(nodes)) {
+      if (!n || typeof n !== "object") continue;
+      const inputs = n.inputs ?? {};
+      if (typeof inputs.seed === "number") seed = inputs.seed;
+      if (n.class_type === "CLIPTextEncode" && typeof inputs.text === "string" && inputs.text.length > 8) {
+        if (!prompt || /positive/i.test(n._meta?.title || "")) prompt = inputs.text;
+      }
+    }
+  } catch {
+    /* not json */
+  }
+  return { seed, prompt };
+}
+
+export function seedFromBytes(bytes: Uint8Array): number {
+  let h = 2166136261;
+  const step = Math.max(1, Math.floor(bytes.length / 4096));
+  for (let i = 0; i < bytes.length; i += step) {
+    h ^= bytes[i] ?? 0;
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0) % 1_000_000_000;
 }
 
 export function downloadBlob(filename: string, blob: Blob) {

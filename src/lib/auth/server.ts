@@ -115,15 +115,25 @@ const baseURL = explicitBaseURL ?? {
 
 // Origins Better Auth accepts on credentialed POSTs (sign-up/sign-in, etc.).
 // Missing entries here surface as FORBIDDEN "Invalid origin".
-const trustedOrigins: string[] = explicitBaseURL
+const trustedOrigins: string[] | ((request?: Request) => Promise<string[]>) = explicitBaseURL
   ? [explicitBaseURL, ...LOCAL_DEV_ORIGINS]
-  : [
-      // Host wildcards (matched against Origin's host)
-      ...previewAllowedHosts,
-      // Full-origin wildcards (matched against Origin)
-      ...previewAllowedHosts.flatMap((host) => [`https://${host}`, `http://${host}`]),
-      ...LOCAL_DEV_ORIGINS,
-    ];
+  : async (request?: Request) => {
+      const list = [
+        ...previewAllowedHosts,
+        ...previewAllowedHosts.flatMap((host) => [`https://${host}`, `http://${host}`]),
+        ...LOCAL_DEV_ORIGINS,
+      ];
+      const origin = request?.headers.get("origin") ?? "";
+      const host = (request?.headers.get("host") ?? "").split(":")[0] ?? "";
+      const lan =
+        /^(192\.168\.|10\.|172\.(1[6-9]|2\d|3[0-1])\.)/.test(host) ||
+        /:\/\/(192\.168\.|10\.|172\.(1[6-9]|2\d|3[0-1])\.)/.test(origin);
+      if (origin && lan) list.push(origin);
+      if (host && lan) {
+        list.push(`http://${request?.headers.get("host")}`, `https://${request?.headers.get("host")}`);
+      }
+      return list.filter(Boolean) as string[];
+    };
 
 const databaseUrl = env("DATABASE_URL");
 

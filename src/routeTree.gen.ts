@@ -10,33 +10,102 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as StageRouteImport } from './routes/stage'
+import { Route as ApiBrainRouteImport } from './routes/api/brain'
+import { Route as ApiGenerateRouteImport } from './routes/api/generate'
+import { Route as ApiQueueRouteImport } from './routes/api/queue'
+import { Route as ApiStatusRouteImport } from './routes/api/status'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const StageRoute = StageRouteImport.update({
+  id: '/stage',
+  path: '/stage',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiBrainRoute = ApiBrainRouteImport.update({
+  id: '/api/brain',
+  path: '/api/brain',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiGenerateRoute = ApiGenerateRouteImport.update({
+  id: '/api/generate',
+  path: '/api/generate',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiQueueRoute = ApiQueueRouteImport.update({
+  id: '/api/queue',
+  path: '/api/queue',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiStatusRoute = ApiStatusRouteImport.update({
+  id: '/api/status',
+  path: '/api/status',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/stage': typeof StageRoute
+  '/api/brain': typeof ApiBrainRoute
+  '/api/generate': typeof ApiGenerateRoute
+  '/api/queue': typeof ApiQueueRoute
+  '/api/status': typeof ApiStatusRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/stage': typeof StageRoute
+  '/api/brain': typeof ApiBrainRoute
+  '/api/generate': typeof ApiGenerateRoute
+  '/api/queue': typeof ApiQueueRoute
+  '/api/status': typeof ApiStatusRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/stage': typeof StageRoute
+  '/api/brain': typeof ApiBrainRoute
+  '/api/generate': typeof ApiGenerateRoute
+  '/api/queue': typeof ApiQueueRoute
+  '/api/status': typeof ApiStatusRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/stage'
+    | '/api/brain'
+    | '/api/generate'
+    | '/api/queue'
+    | '/api/status'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/stage'
+    | '/api/brain'
+    | '/api/generate'
+    | '/api/queue'
+    | '/api/status'
+  id:
+    | '__root__'
+    | '/'
+    | '/stage'
+    | '/api/brain'
+    | '/api/generate'
+    | '/api/queue'
+    | '/api/status'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  StageRoute: typeof StageRoute
+  ApiBrainRoute: typeof ApiBrainRoute
+  ApiGenerateRoute: typeof ApiGenerateRoute
+  ApiQueueRoute: typeof ApiQueueRoute
+  ApiStatusRoute: typeof ApiStatusRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +117,51 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/stage': {
+      id: '/stage'
+      path: '/stage'
+      fullPath: '/stage'
+      preLoaderRoute: typeof StageRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/brain': {
+      id: '/api/brain'
+      path: '/api/brain'
+      fullPath: '/api/brain'
+      preLoaderRoute: typeof ApiBrainRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/generate': {
+      id: '/api/generate'
+      path: '/api/generate'
+      fullPath: '/api/generate'
+      preLoaderRoute: typeof ApiGenerateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/queue': {
+      id: '/api/queue'
+      path: '/api/queue'
+      fullPath: '/api/queue'
+      preLoaderRoute: typeof ApiQueueRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/status': {
+      id: '/api/status'
+      path: '/api/status'
+      fullPath: '/api/status'
+      preLoaderRoute: typeof ApiStatusRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  StageRoute: StageRoute,
+  ApiBrainRoute: ApiBrainRoute,
+  ApiGenerateRoute: ApiGenerateRoute,
+  ApiQueueRoute: ApiQueueRoute,
+  ApiStatusRoute: ApiStatusRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -110,7 +110,7 @@ cp /tmp/pose-gal/Krea2-Pose-Library-for-EasyUse/samples/*.webp "$EASY/samples/"
 
 ## How to use Forge
 
-1. Comfy running, Forge v27+, header **LLM** green, **ckpt** count not “No ComfyUI”.
+1. Comfy running, Forge v173+, header **LLM** green, **ckpt** count not “No ComfyUI”.
 2. Pick a checkpoint that matches the LoRA (Illustrious LoRA → Dasiwa / novaAnime XL, not CuteKittenMix).
 3. Type a scene. **Write prompt** (or **Sex**) asks Skynet for 3 graphic ideas. Click one.
 4. **Generate** sends your box as-is to Comfy (does not rewrite).
@@ -118,6 +118,7 @@ cp /tmp/pose-gal/Krea2-Pose-Library-for-EasyUse/samples/*.webp "$EASY/samples/"
 6. `__hair__` chips insert a wildcard. **Roll** picks a line from `wildcards/`.
 7. After a still: detector is **WD14** (booru tags), not the old color guess. Tap **Scan** if it is empty.
 8. **Comfy graphs…** runs a saved json from `user/default/workflows` (API format). UI-only graphs open in Comfy.
+9. **Play / video:** WAN 2.2 14B is two files (HIGH then LOW, same mix). High-only is pink static. Do not pair Dasiwa High with Rapid Low. Sound needs `sudo apt install -y ffmpeg espeak-ng` and **Sound on**.
 
 ---
 
@@ -129,7 +130,7 @@ https://github.com/OblivionKnight4209/forge-comfyui/releases
 pkill -f "vite|npm run dev" 2>/dev/null || true
 rm -rf ~/forge && mkdir -p ~/forge
 cd ~/Downloads
-wget -O Forge-offline.zip https://github.com/OblivionKnight4209/forge-comfyui/releases/download/v27/Forge-offline.zip
+wget -O Forge-offline.zip https://github.com/OblivionKnight4209/forge-comfyui/releases/download/v174/Forge-offline.zip
 unzip -o Forge-offline.zip -d ~/forge
 cd ~/forge && chmod +x start-forge.sh && ./start-forge.sh
 ```

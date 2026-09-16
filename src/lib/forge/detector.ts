@@ -280,3 +280,27 @@ export async function scanMedia(dataUrl: string): Promise<ScanResult> {
     scannedAt: Date.now(),
   };
 }
+
+export function scanFromTags(raw: string): ScanResult {
+  const tags = raw
+    .split(/[,;\n]/)
+    .map((t) => t.trim().replace(/_/g, " "))
+    .filter(Boolean)
+    .slice(0, 32)
+    .map((tag) => ({ tag, confidence: 0.9 }));
+  const summary =
+    tags.length > 0
+      ? `WD14: ${tags
+          .slice(0, 14)
+          .map((t) => t.tag)
+          .join(", ")}.`
+      : "WD14 returned no tags.";
+  return {
+    summary,
+    tags,
+    boxes: [],
+    palette: [],
+    notes: ["ComfyUI-WD14-Tagger — local, not a cloud model."],
+    scannedAt: Date.now(),
+  };
+}
