@@ -668,6 +668,14 @@ export function guessArch(name: string): ModelFamily {
   return "sdxl";
 }
 
+/** CLIPSetLastLayer on a file with no CLIP → `NoneType.clone`. Only SD 1.5 has a CLIP to skip. */
+export function clipHasSkip(name: string): boolean {
+  if (guessArch(name) !== "sd15") return false;
+  const n = (name || "").toLowerCase();
+  if (/inpaint|flux|krea|lumina|sd3|hunyuan|unet|gguf|dit/.test(n)) return false;
+  return true;
+}
+
 /** Still-image mixes only — skip WAN / SVD / 3D. */
 export function isImageCheckpoint(name: string) {
   if (!isRealCheckpoint(name)) return false;
@@ -1050,7 +1058,6 @@ export function familyOfSelection(s: Pick<ComfySettings, "stillLoader" | "checkp
   const a = guessArch(s.checkpoint || s.fluxUnet || "");
   if (a === "flux") return "flux";
   if (a === "sd15") return "sd15";
-  if (s.stillFamily === "sd15" || s.stillFamily === "flux") return s.stillFamily;
   return "sdxl";
 }
 

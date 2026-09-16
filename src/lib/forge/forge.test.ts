@@ -43,6 +43,7 @@ import {
   pickEditCheckpoint,
   pickControlNet,
   pickInpaintCkpt,
+  clipHasSkip,
 } from "./types.ts";
 import {
   buildApiWorkflow,
@@ -139,6 +140,32 @@ describe("i2i graph", () => {
       settings: settings({ clipSkip: 2, stillFamily: "sd15", checkpoint: "v1-5-pruned.safetensors" }),
     });
     assert.ok(classes(g).includes("CLIPSetLastLayer"));
+  });
+  it("stale sd15 family on an XL mix does not CLIP-skip (NoneType.clone)", () => {
+    const g = graph({
+      mode: "t2i",
+      settings: settings({
+        clipSkip: 2,
+        stillFamily: "sd15",
+        checkpoint: "DasiwaIllustriousAnime_epitaphecstasy.safetensors",
+      }),
+    });
+    assert.ok(!classes(g).includes("CLIPSetLastLayer"));
+  });
+  it("i2i inpaint never CLIP-skips an XL inpaint mix", () => {
+    const g = graph({
+      mode: "i2i",
+      denoise: 0.85,
+      imageCount: 1,
+      settings: settings({
+        clipSkip: 2,
+        stillFamily: "sd15",
+        checkpoint: "illustriousxlV01_inpainting.safetensors",
+      }),
+    });
+    assert.ok(!classes(g).includes("CLIPSetLastLayer"));
+    assert.equal(clipHasSkip("illustriousxlV01_inpainting.safetensors"), false);
+    assert.equal(clipHasSkip("v1-5-pruned.safetensors"), true);
   });
   it("6s stays at 81 frames so WAN does not smear", () => {
     assert.equal(wanFrameCount(6, 16), 81);

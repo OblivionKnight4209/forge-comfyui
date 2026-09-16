@@ -1,5 +1,5 @@
 import type { Aspect, ComfySettings, Job, LoraEntry, Mode, ModelFamily } from "./types";
-import { ASPECT_SIZE, guessArch, guessLoraLane, i2iCanvasSize, isHighNoiseUnet, isLightningUnet, isLowNoiseUnet, isNotALora, isWan14b, isWan5b, loraFitsCheckpoint, loraNameKeys, pickInpaintCkpt, promptNameWords, sizeForFamily, wordHitsLoraName } from "./types";
+import { ASPECT_SIZE, clipHasSkip, guessArch, guessLoraLane, i2iCanvasSize, isHighNoiseUnet, isLightningUnet, isLowNoiseUnet, isNotALora, isWan14b, isWan5b, loraFitsCheckpoint, loraNameKeys, pickInpaintCkpt, promptNameWords, sizeForFamily, wordHitsLoraName } from "./types";
 
 export type ApiNode = {
   class_type: string;
@@ -283,20 +283,18 @@ function fluxStill(args: BuildArgs): ApiPrompt {
 function sdxlStill(args: BuildArgs): ApiPrompt {
   const s = args.settings;
   const ckpt = s.checkpoint || s.sdxlCheckpoint;
-  const arch = s.stillFamily === "flux" || s.stillFamily === "sd15" ? s.stillFamily : "sdxl";
+  const arch = guessArch(ckpt);
   const { w, h } =
     args.mode === "i2i" && args.inputW && args.inputH
       ? i2iCanvasSize(args.inputW, args.inputH, arch === "sd15" ? "sd15" : arch === "flux" ? "flux" : "sdxl")
-      : sizeForFamily(arch, args.aspect);
+      : sizeForFamily(arch === "wan" ? "sdxl" : arch, args.aspect);
   const prompt: ApiPrompt = {
     "1": node("CheckpointLoaderSimple", { ckpt_name: ckpt }, "Checkpoint"),
   };
   let clip: [string, number] = ["1", 1];
   const skip = s.clipSkip || 0;
   const fluxCkpt = arch === "flux";
-  // CLIP skip only on 1.5. XL/Pony/Illustrious + a file with no CLIP
-  // throws `NoneType has no attribute clone` in CLIPSetLastLayer.
-  if (skip >= 2 && arch === "sd15") {
+  if (skip >= 2 && clipHasSkip(ckpt)) {
     prompt["4"] = node(
       "CLIPSetLastLayer",
       { clip: ["1", 1], stop_at_clip_layer: -Math.min(skip, 12) },
@@ -426,8 +424,8 @@ function sdxlStill(args: BuildArgs): ApiPrompt {
 function sdxlInpaint(args: BuildArgs): ApiPrompt {
   const s = args.settings;
   const ckptWant = s.checkpoint || s.sdxlCheckpoint;
-  const arch = s.stillFamily === "sd15" ? "sd15" : "sdxl";
   const ckpt = pickInpaintCkpt(ckptWant, [ckptWant, s.sdxlCheckpoint].filter(Boolean));
+  const arch = guessArch(ckpt || ckptWant) === "sd15" ? "sd15" : "sdxl";
   const inpaintWeights = /inpaint/i.test(ckpt);
   const { w, h } =
     args.inputW && args.inputH
@@ -438,7 +436,7 @@ function sdxlInpaint(args: BuildArgs): ApiPrompt {
   };
   let clip: [string, number] = ["1", 1];
   const skip = s.clipSkip || 0;
-  if (skip >= 2 && arch === "sd15") {
+  if (skip >= 2 && clipHasSkip(ckpt || ckptWant)) {
     prompt["4"] = node(
       "CLIPSetLastLayer",
       { clip: ["1", 1], stop_at_clip_layer: -Math.min(skip, 12) },
