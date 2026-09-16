@@ -66,6 +66,7 @@ import {
   wanFpsForDuration,
   isRealCheckpoint,
   isImageCheckpoint,
+  isNotALora,
   canEditPhoto,
   pickVaeName,
   resolveCkpt,
@@ -1551,7 +1552,7 @@ export function Studio() {
           ? { ...state.settings, ...settingsForCheckpoint(opts.checkpoint) }
           : state.settings,
         images,
-        loras: state.loras.filter((l) => l.enabled).slice(0, 8),
+        loras: state.loras.filter((l) => l.enabled && !isNotALora(l.filename)).slice(0, 8),
       });
       if (!r.ok) {
         setQueueBanner(r.message);
@@ -2157,7 +2158,7 @@ export function Studio() {
     <div className="flex min-h-dvh flex-col bg-bg pb-8 text-fg">
       <header className="flex flex-wrap items-center gap-2 px-3 py-3 md:gap-3 md:px-6">
         <p className="text-[15px] font-medium tracking-tight">Forge</p>
-        <span className="text-[11px] tabular-nums text-subtle">203</span>
+        <span className="text-[11px] tabular-nums text-subtle">204</span>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {meta.video ? (
             <select

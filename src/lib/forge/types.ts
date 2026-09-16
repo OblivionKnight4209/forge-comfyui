@@ -664,7 +664,19 @@ export function guessLoraLane(name: string): LoraLane {
   return "any";
 }
 
+/** Quantized checkpoints / unfinished downloads that must not go through LoraLoader. */
+export function isNotALora(name: string) {
+  const n = (name || "").toLowerCase().replace(/\\/g, "/");
+  const base = n.split("/").pop() || n;
+  if (!base) return true;
+  if (/\.part$/i.test(base)) return true;
+  if (/\.gguf$/i.test(base)) return true;
+  if (/int8q8|nvfp4|q8q2extended|q8.?extended|fp4.?extended/.test(base)) return true;
+  return false;
+}
+
 export function loraFitsLane(loraName: string, ckptName: string): boolean {
+  if (isNotALora(loraName)) return false;
   const ll = guessLoraLane(loraName);
   let cl = guessLoraLane(ckptName);
   if (cl === "any") {
@@ -694,6 +706,7 @@ export function guessLoraFamily(name: string): ModelFamily | "any" {
 }
 
 export function loraFitsCheckpoint(loraName: string, ckptFamily: ModelFamily, ckptName?: string): boolean {
+  if (isNotALora(loraName)) return false;
   if (ckptName) return loraFitsLane(loraName, ckptName);
   const lf = guessLoraLane(loraName);
   if (ckptFamily === "flux") return lf === "flux";

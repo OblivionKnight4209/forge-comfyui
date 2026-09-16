@@ -4,7 +4,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import type { ComfyStatus } from "./types";
 import { designClipAudio, ensureVoice, espeakVoice, ffmpegBed } from "./clip-sound";
-import { isRealCheckpoint } from "./types";
+import { isNotALora, isRealCheckpoint } from "./types";
 import { sniffMediaMime } from "./media-mime";
 
 function trimBase(url: string) {
@@ -100,6 +100,65 @@ function comfyRoots(): string[] {
     }
   }
   return [...new Set([...roots, ...extra])];
+}
+
+function safetensorsComplete(abs: string): boolean {
+  try {
+    const st = fs.statSync(abs);
+    if (st.size < 64) return false;
+    if (!/\.safetensors$/i.test(abs)) return st.size > 1024;
+    const fd = fs.openSync(abs, "r");
+    const buf = Buffer.alloc(8);
+    fs.readSync(fd, buf, 0, 8, 0);
+    fs.closeSync(fd);
+    const n = Number(buf.readBigUInt64LE(0));
+    if (!Number.isFinite(n) || n < 2 || n > 80_000_000) return false;
+    return st.size >= 8 + n + 32;
+  } catch {
+    return false;
+  }
+}
+
+function quarantineBadLoras(): string[] {
+  const junk = path.join(os.homedir(), "comfy/not-models");
+  const moved: string[] = [];
+  try {
+    fs.mkdirSync(junk, { recursive: true });
+  } catch {
+    return moved;
+  }
+  for (const root of comfyRoots()) {
+    const dir = path.join(root, "models/loras");
+    let ents: import("node:fs").Dirent[] = [];
+    try {
+      ents = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const ent of ents) {
+      if (!ent.isFile()) continue;
+      const src = path.join(dir, ent.name);
+      let size = 0;
+      try {
+        size = fs.statSync(src).size;
+      } catch {
+        continue;
+      }
+      const badName = isNotALora(ent.name) || /\.part$/i.test(ent.name);
+      const truncated = /\.safetensors$/i.test(ent.name) && !safetensorsComplete(src);
+      const huge = size > 800 * 1024 * 1024;
+      if (!badName && !truncated && !huge) continue;
+      const dest = path.join(junk, ent.name);
+      try {
+        if (fs.existsSync(dest)) fs.unlinkSync(src);
+        else fs.renameSync(src, dest);
+        moved.push(ent.name);
+      } catch {
+        /* leave it */
+      }
+    }
+  }
+  return moved;
 }
 
 function walkFiles(dir: string, base: string, ext: RegExp, out: string[]) {
@@ -338,11 +397,12 @@ function rescueStrayLoras(): string[] {
 
 export function scanDiskModels() {
   const rescued = rescueStrayLoras();
-  if (rescued.length) diskCache = null;
+  const badLoras = quarantineBadLoras();
+  if (rescued.length || badLoras.length) diskCache = null;
   const weights = /\.(safetensors|ckpt|pt|pth|sft|gguf)$/i;
   return {
     checkpoints: scanCheckpoints(),
-    loras: scanRel("models/loras", weights),
+    loras: scanRel("models/loras", weights).filter((n) => !isNotALora(n)),
     unets: [
       ...scanRel("models/unet", weights),
       ...scanRel("models/diffusion_models", weights),
@@ -506,7 +566,7 @@ export async function probeComfy(baseUrl: string): Promise<ComfyStatus> {
       ...widgetOptions(info.LoraLoader, "lora_name"),
       ...widgetOptions(info.LoraLoaderModelOnly, "lora_name"),
       ...disk.loras,
-    ];
+    ].filter((n) => !isNotALora(n));
     const unets = [
       ...unetFolder,
       ...widgetOptions(info.UNETLoader, "unet_name"),

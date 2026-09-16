@@ -1,5 +1,5 @@
 import type { Aspect, ComfySettings, Job, LoraEntry, Mode, ModelFamily } from "./types";
-import { ASPECT_SIZE, guessArch, guessLoraLane, isHighNoiseUnet, isLightningUnet, isLowNoiseUnet, loraFitsCheckpoint, loraNameKeys, promptNameWords, sizeForFamily, wanStackVersion, wordHitsLoraName } from "./types";
+import { ASPECT_SIZE, guessArch, guessLoraLane, isHighNoiseUnet, isLightningUnet, isLowNoiseUnet, isNotALora, loraFitsCheckpoint, loraNameKeys, promptNameWords, sizeForFamily, wanStackVersion, wordHitsLoraName } from "./types";
 
 export type ApiNode = {
   class_type: string;
@@ -117,7 +117,7 @@ function chainLoras(
   let model = modelRef;
   let clip = clipRef;
   let id = startId;
-  for (const l of loras.filter((x) => x.enabled)) {
+  for (const l of loras.filter((x) => x.enabled && !isNotALora(x.filename))) {
     const nid = String(id++);
     const wantClip = clip && Math.abs(l.clipStrength ?? 0) > 0.001;
     if (wantClip) {

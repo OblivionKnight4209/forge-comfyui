@@ -15,6 +15,7 @@ import {
   checkpointMatchesStyle,
   isRealCheckpoint,
   isImageCheckpoint,
+  isNotALora,
   resolveCkpt,
   isWanUnet,
   wanPairOk,
@@ -885,6 +886,11 @@ describe("checkpoints", () => {
 });
 
 describe("loras", () => {
+  it("rejects quantized checkpoints sitting in the LoRA folder", () => {
+    assert.equal(isNotALora("realismByStableYogi_v30INT8Q8Extended.safetensors"), true);
+    assert.equal(isNotALora("add_detail.safetensors"), false);
+    assert.equal(isNotALora("alice.safetensors"), false);
+  });
   it("drops XL-named lora on a 1.5 checkpoint", () => {
     const list: LoraEntry[] = [
       {
