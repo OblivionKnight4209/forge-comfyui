@@ -170,7 +170,6 @@ export function Studio() {
   const [likes, setLikes] = useState<{ id: string; src: string; prompt: string; seed: number }[]>([]);
   const [zoom, setZoom] = useState<{ src: string; kind: "image" | "video"; name?: string } | null>(null);
   const [nsfwPick, setNsfwPick] = useState<Set<string>>(new Set());
-  const [showNeg, setShowNeg] = useState(false);
   const [ideas, setIdeas] = useState<string[]>([]);
   const [graphs, setGraphs] = useState<string[]>([]);
   const [llm, setLlm] = useState<{ ok: boolean; models: string[]; message: string }>({
@@ -1967,7 +1966,7 @@ export function Studio() {
     <div className="flex min-h-dvh flex-col bg-bg pb-8 text-fg">
       <header className="flex items-center gap-3 px-4 py-3 md:px-6">
         <p className="text-[15px] font-medium tracking-tight">Forge</p>
-        <span className="text-[11px] tabular-nums text-subtle">176</span>
+        <span className="text-[11px] tabular-nums text-subtle">177</span>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {meta.video ? (
             <select
@@ -2912,6 +2911,61 @@ export function Studio() {
                 {brainBusy ? "…" : "Brain"}
               </button>
               </div>
+              <div className="mt-1 border-t border-line px-1 pt-2">
+                <div className="mb-1 flex items-center gap-1 px-1">
+                  <Label htmlFor="neg" className="flex-1 px-1 text-[11px] uppercase tracking-wide text-muted">
+                    Negative — keep out {negLocked ? "(locked)" : ""}
+                  </Label>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => {
+                      useForge.getState().setNegative(
+                        negativeForPrompt(useForge.getState().settings.checkpoint, useForge.getState().prompt),
+                        { force: true },
+                      );
+                      useForge.getState().setNegLocked(true);
+                      logForge("info", "Negative", "Filled and locked");
+                    }}
+                  >
+                    Auto
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={negLocked ? "default" : "secondary"}
+                    onClick={() => {
+                      const next = !useForge.getState().negLocked;
+                      useForge.getState().setNegLocked(next);
+                      logForge("info", "Negative", next ? "Locked" : "Unlocked");
+                    }}
+                  >
+                    {negLocked ? "Unlock" : "Lock"}
+                  </Button>
+                </div>
+                <div className="flex items-start gap-2">
+                  <Textarea
+                    id="neg"
+                    ref={negRef}
+                    value={negative}
+                    readOnly={negLocked}
+                    onChange={(e) => {
+                      if (useForge.getState().negLocked) return;
+                      useForge.getState().setNegative(e.target.value);
+                    }}
+                    placeholder={negLocked ? "Locked. Tap Unlock to edit." : "extra fingers, watermark, blurry…  (empty still sends a quality floor)"}
+                    className={cn("min-h-14 flex-1 resize-none bg-transparent text-sm shadow-none placeholder:text-subtle", negLocked && "opacity-60")}
+                  />
+                  <SpeechMic
+                    label="Speak negative"
+                    onPhrase={(p) => {
+                      if (useForge.getState().negLocked) return;
+                      useForge.getState().setNegative(appendSpoken(useForge.getState().negative, p));
+                    }}
+                  />
+                </div>
+              </div>
               {dock === "look" ? (
               <div className="forge-chip-row px-1 pb-1">
                 <button
@@ -2993,53 +3047,6 @@ export function Studio() {
               ))}
             </div>
           ) : null}
-          {showNeg ? (
-            <div className="mt-1 border-t border-line px-1 pt-2">
-              <Label htmlFor="neg" className="px-2 text-[11px] uppercase tracking-wide text-muted">
-                Negative {negLocked ? "LOCKED" : "unlocked"}
-              </Label>
-              <div className="mb-1 flex gap-1 px-1">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => {
-                    useForge.getState().setNegative(
-                      negativeForPrompt(useForge.getState().settings.checkpoint, useForge.getState().prompt),
-                      { force: true },
-                    );
-                    useForge.getState().setNegLocked(true);
-                    toast.success("Negative filled and locked");
-                  }}
-                >
-                  Auto
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={negLocked ? "default" : "secondary"}
-                  onClick={() => {
-                    const next = !useForge.getState().negLocked;
-                    useForge.getState().setNegLocked(next);
-                    toast.success(next ? "Negative locked — cannot edit" : "Negative unlocked");
-                  }}
-                >
-                  {negLocked ? "Unlock" : "Lock"}
-                </Button>
-              </div>
-              <Textarea
-                id="neg"
-                ref={negRef}
-                value={negative}
-                readOnly={negLocked}
-                onChange={(e) => {
-                  if (useForge.getState().negLocked) return;
-                  useForge.getState().setNegative(e.target.value);
-                }}
-                placeholder={negLocked ? "Locked. Tap Unlock to edit." : "What to keep out — extra limbs, watermark…"}
-                className={cn("mt-1 min-h-16 bg-bg text-sm shadow-none", negLocked && "opacity-60")}
-              />
-            </div>
           ) : null}
           <div className="flex flex-wrap items-center gap-1.5 px-1 pb-1 pt-2">
             <Button
@@ -3107,21 +3114,6 @@ export function Studio() {
             )}
             {dock === "look" ? (
             <>
-            <Button
-              type="button"
-              variant={showNeg ? "default" : "secondary"}
-              size="sm"
-              aria-pressed={showNeg}
-              onClick={() => {
-                setShowNeg((v) => {
-                  const next = !v;
-                  if (next) requestAnimationFrame(() => negRef.current?.focus());
-                  return next;
-                });
-              }}
-            >
-              Neg
-            </Button>
             <Button
               type="button"
               variant={seedLocked ? "default" : "ghost"}
