@@ -20,7 +20,7 @@ export function brainSystem(opts: { wrap?: string; checkpoint?: string }) {
 
 Two jobs:
 - SHORT line (a few words, one subject): FILL IT IN. Who, looks (face/hair/body/clothes or fur), what is happening, where, camera, light.
-- If they already wrote details: KEEP every phrase they typed. Only ADD missing looks / place / camera / light. Do not replace their words. Do not invent a new scene.
+- NEW TAKE: keep the subject only. Change hair, clothes, place, camera, light, and the beat. Do not copy or lightly edit the previous prompt.
 
 Always include, in this order when filling a short line:
 1. Who — species/age-adult, face, hair, body, clothes (or none if they asked)
@@ -41,9 +41,12 @@ ${wrap ? `- Visual wrap they picked: ${wrap}. Weave it in, do not replace the sc
 ${ckpt}`;
 }
 
-export function brainUser(opts: { prompt: string; flavor?: string }) {
+export function brainUser(opts: { prompt: string; flavor?: string; fresh?: boolean }) {
   const line = opts.prompt.trim() || "invent a striking adult scene";
   const flavor = opts.flavor ? `Lean: ${opts.flavor}.` : "";
+  if (opts.fresh) {
+    return `NEW TAKE. Same subject, different looks / place / camera / light / beat. Do not copy the last prompt.\nSubject:\n${line}\n\n${flavor}\nWrite a new prompt.`;
+  }
   const words = line.split(/\s+/).filter(Boolean).length;
   const commas = (line.match(/,/g) || []).length;
   const short = words <= 10 && commas < 2;

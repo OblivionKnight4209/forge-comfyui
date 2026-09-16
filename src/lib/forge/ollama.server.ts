@@ -178,6 +178,8 @@ export async function runBrain(opts: {
   flavor?: string;
   wrap?: string;
   checkpoint?: string;
+  fresh?: boolean;
+  seed?: number;
 }): Promise<{ ok: true; text: string; model: string } | { ok: false; message: string }> {
   const base = process.env.OLLAMA_HOST || "http://127.0.0.1:11434";
   const probed = await probeOllama(base);
@@ -186,6 +188,7 @@ export async function runBrain(opts: {
     return { ok: false, message: probed.message || "Ollama has no model. On the T1000: ollama list" };
   }
   try {
+    const seed = Number.isFinite(opts.seed) ? Math.abs(Math.floor(opts.seed as number)) : Date.now() % 1_000_000_000;
     const res = await ollamaFetch(
       base,
       "/api/chat",
@@ -197,9 +200,9 @@ export async function runBrain(opts: {
           stream: false,
           messages: [
             { role: "system", content: brainSystem({ wrap: opts.wrap, checkpoint: opts.checkpoint }) },
-            { role: "user", content: brainUser({ prompt: opts.prompt, flavor: opts.flavor }) },
+            { role: "user", content: brainUser({ prompt: opts.prompt, flavor: opts.flavor, fresh: opts.fresh }) },
           ],
-          options: { temperature: 0.9, num_predict: 400, num_ctx: 4096 },
+          options: { temperature: 1.25, top_p: 0.95, seed, num_predict: 400, num_ctx: 4096 },
         }),
       },
       90000,

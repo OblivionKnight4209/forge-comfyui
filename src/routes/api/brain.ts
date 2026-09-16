@@ -16,6 +16,8 @@ export const Route = createFileRoute("/api/brain")({
           flavor?: string;
           wrap?: string;
           checkpoint?: string;
+          fresh?: boolean;
+          seed?: number;
         };
         const { runBrain } = await import("@/lib/forge/ollama.server");
         const result = await runBrain({
@@ -23,6 +25,8 @@ export const Route = createFileRoute("/api/brain")({
           flavor: body.flavor,
           wrap: body.wrap,
           checkpoint: body.checkpoint,
+          fresh: body.fresh,
+          seed: body.seed,
         });
         return Response.json(result);
       },

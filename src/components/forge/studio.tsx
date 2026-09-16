@@ -81,7 +81,7 @@ import {
   type Mode,
   type ModelFamily,
 } from "@/lib/forge/types";
-import { PROMPT_FLAVORS, expandPrompt, grokExpand, grokMotion, writeIdeas, writePrompt, isAdult, flattenPrompt, userLead, recoverScene, composeNewScene, isPurpleProse, type PromptFlavor } from "@/lib/forge/wildcards";
+import { PROMPT_FLAVORS, expandPrompt, grokExpand, grokMotion, writeIdeas, writePrompt, isAdult, flattenPrompt, userLead, recoverScene, composeNewScene, isPurpleProse, sceneCore, tokenOverlap, type PromptFlavor } from "@/lib/forge/wildcards";
 import { composeI2iPrompt, expandEditFields } from "@/lib/forge/edit-prompt";
 import { isVideoName, mediaMime, withVideoDataUrl } from "@/lib/forge/media-mime";
 import { writeExtreme, writeDarkSet, writeTabooSet, writeHorrorSet, isWashed, NSFW_TYPES, nsfwGroup, writeMenus, WHO_BITS, WHERE_BITS, MORE_BITS, COMIC_BITS, EVIL_BITS, FACE_BITS, BODY_BITS, CLOTHES_BITS, PLACE_BITS, CAM_BITS, LIGHT_BITS } from "@/lib/forge/extreme";
@@ -1105,14 +1105,19 @@ export function Studio() {
       state.mode === "ref2i"
         ? state.refPrompt.trim() || state.prompt.trim()
         : state.prompt.trim();
+    const core = sceneCore(line) || line || "an adult";
     setBrainBusy(true);
-    logForge("info", "Brain", "Writing…");
+    setDock("write");
+    logForge("info", "Brain", `New take of “${core.slice(0, 48)}”`);
     try {
+      const seed = (Date.now() + Math.floor(Math.random() * 99991)) % 1_000_000_000;
       const r = await lanBrain({
-        prompt: line || "invent a striking adult scene",
+        prompt: core,
         flavor,
         wrap: state.artWrap,
         checkpoint: state.settings.checkpoint,
+        fresh: true,
+        seed,
       });
       const fam =
         state.settings.stillFamily === "sd15" || guessArch(state.settings.checkpoint) === "sd15"
@@ -1120,32 +1125,39 @@ export function Studio() {
           : state.settings.stillFamily === "flux"
             ? ("flux" as const)
             : ("sdxl" as const);
-      const fallback = grokExpand({
-        typed: line || "an adult",
-        files: state.wildcards,
-        seed: Date.now() % 1_000_000_000,
-        family: fam,
-        checkpoint: state.settings.checkpoint,
-        roll: state.promptRoll,
-      });
-      let used = "";
-      if (r.ok) {
-        const keep = (line || "")
-          .split(/\s+/)
-          .filter((w) => w.length > 2)
-          .slice(0, 4);
-        const lost = keep.some((w) => !r.text.toLowerCase().includes(w.toLowerCase()));
-        const same = r.text.replace(/\s+/g, " ").trim().toLowerCase() === (line || "").toLowerCase();
-        used = lost || same ? fallback : r.text;
-      } else {
-        used = fallback;
-        logForge("warn", "Brain", r.message);
+      const locals = [0, 1, 2].map((i) =>
+        grokExpand({
+          typed: core,
+          files: state.wildcards,
+          seed: seed + i * 7919,
+          family: fam,
+          checkpoint: state.settings.checkpoint,
+          roll: state.promptRoll,
+        }),
+      );
+      if (!r.ok) logForge("warn", "Brain", r.message);
+      const candidates = [r.ok ? r.text : "", ...locals]
+        .map((t) => t.replace(/\s+/g, " ").trim())
+        .filter((t) => t.length > 8);
+      const ranked = candidates
+        .map((t) => ({ t, o: tokenOverlap(t, line) }))
+        .sort((a, b) => a.o - b.o);
+      const unique: string[] = [];
+      for (const c of ranked) {
+        if (unique.some((u) => tokenOverlap(u, c.t) > 0.82)) continue;
+        unique.push(c.t);
+        if (unique.length >= 3) break;
       }
+      const used = unique[0] || locals[0] || core;
       skipIdeaRefresh.current = true;
       state.setPrompt(used);
       if (state.mode === "ref2i") state.setRefPrompt(used);
-      setIdeas([line || "typed", used].filter(Boolean).slice(0, 4));
-      logForge("info", "Brain", r.ok ? `Wrote with ${r.model.split("/").pop()}` : "Ollama missed — filled locally");
+      setIdeas(unique.length ? unique : [used]);
+      logForge(
+        "info",
+        "Brain",
+        r.ok ? `New take · ${r.model.split("/").pop()}` : "Ollama missed — three local takes",
+      );
       return true;
     } finally {
       setBrainBusy(false);
@@ -2024,7 +2036,7 @@ export function Studio() {
     <div className="flex min-h-dvh flex-col bg-bg pb-8 text-fg">
       <header className="flex items-center gap-3 px-4 py-3 md:px-6">
         <p className="text-[15px] font-medium tracking-tight">Forge</p>
-        <span className="text-[11px] tabular-nums text-subtle">184</span>
+        <span className="text-[11px] tabular-nums text-subtle">185</span>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {meta.video ? (
             <select

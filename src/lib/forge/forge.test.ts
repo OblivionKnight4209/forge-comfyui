@@ -48,7 +48,7 @@ import {
   chunkPrompt,
 } from "./workflows.ts";
 import { isVideoName, mediaMime, withVideoDataUrl } from "./media-mime.ts";
-import { expandPrompt, parseInlineLoras, writePrompt, keepNeutral, userLead, grokExpand, grokMotion, flattenPrompt, withRandomBlocks, recoverScene, isPurpleProse, DEFAULT_WILDCARDS, isAdult, composeNewScene, isShortSubject } from "./wildcards.ts";
+import { expandPrompt, parseInlineLoras, writePrompt, keepNeutral, userLead, grokExpand, grokMotion, flattenPrompt, withRandomBlocks, recoverScene, isPurpleProse, DEFAULT_WILDCARDS, isAdult, composeNewScene, isShortSubject, sceneCore, tokenOverlap } from "./wildcards.ts";
 import { isWashed, nsfwGroup, writeExtreme, writeHorrorSet, writeTabooSet, writeDarkSet, NSFW_TYPES, writeMenus, FACE_BITS, BODY_BITS, CLOTHES_BITS, PLACE_BITS } from "./extreme.ts";
 import { applyArtWrap, applyQualityOffers, qualityWantsHires, randomSceneLine, LOOK_APPENDS } from "./looks.ts";
 import { pickBrainModel, cleanBrainOut, brainSystem } from "./brain.ts";
@@ -1301,6 +1301,30 @@ describe("wildcards extra", () => {
     assert.match(t, /brindle mutt/i);
     assert.doesNotMatch(t, /keep yard|shield bash|flagstone/i);
     assert.match(t, /low angle|wide|full body|overcast|streetlamp|light|shot/i);
+  });
+  it("sceneCore strips the last fill so a reroll can change looks", () => {
+    const filled =
+      "cat fight a dog, small compact tabby, dirt yard, low angle full bodies, overcast, detailed fur";
+    assert.match(sceneCore(filled), /cat fight a dog/i);
+    assert.doesNotMatch(sceneCore(filled), /overcast|detailed fur/i);
+  });
+  it("two Brain seeds on the same subject are not copies", () => {
+    const a = grokExpand({
+      typed: "cat fight a dog",
+      files: DEFAULT_WILDCARDS,
+      seed: 11,
+      family: "sdxl",
+      checkpoint: "DasiwaIllustrious.safetensors",
+    });
+    const b = grokExpand({
+      typed: "cat fight a dog",
+      files: DEFAULT_WILDCARDS,
+      seed: 11 + 7919,
+      family: "sdxl",
+      checkpoint: "DasiwaIllustrious.safetensors",
+    });
+    assert.notEqual(a, b);
+    assert.ok(tokenOverlap(a, b) < 0.98);
   });
   it("reports missing lists and can expand twice (no lastIndex leak)", () => {
     const files = [{ name: "color", lines: ["red"] }];

@@ -98,6 +98,8 @@ export async function lanBrain(body: {
   flavor?: string;
   wrap?: string;
   checkpoint?: string;
+  fresh?: boolean;
+  seed?: number;
 }): Promise<{ ok: true; text: string; model: string } | { ok: false; message: string }> {
   try {
     const res = await fetch("/api/brain", {

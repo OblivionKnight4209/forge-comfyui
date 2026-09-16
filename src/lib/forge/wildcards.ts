@@ -591,6 +591,34 @@ export function isShortSubject(text: string) {
   return words.length > 0 && words.length <= 10 && commas < 2;
 }
 
+/** Subject only — so Brain can write a new take instead of echoing the last fill. */
+export function sceneCore(text: string): string {
+  const t = (text || "").replace(/\s+/g, " ").trim();
+  if (!t) return t;
+  if (isShortSubject(t)) return t;
+  const lead = userLead(isPurpleProse(t) ? recoverScene(t) || t : t);
+  const chunk = (lead.split(",")[0] || lead).trim();
+  const words = chunk.split(/\s+/).filter(Boolean);
+  if (words.length <= 12) return chunk;
+  return words.slice(0, 10).join(" ");
+}
+
+export function tokenOverlap(a: string, b: string): number {
+  const tok = (s: string) =>
+    new Set(
+      (s || "")
+        .toLowerCase()
+        .split(/[^a-z0-9]+/)
+        .filter((w) => w.length > 2),
+    );
+  const A = tok(a);
+  const B = tok(b);
+  if (!A.size || !B.size) return 0;
+  let n = 0;
+  for (const w of A) if (B.has(w)) n += 1;
+  return n / Math.max(A.size, B.size);
+}
+
 /** Keep every phrase they typed. Only add missing looks / place / camera / light. */
 export function fillGaps(text: string, anime: boolean, rng: () => number): string {
   const lead = (text || "").replace(/\s+/g, " ").trim();
