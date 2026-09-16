@@ -55,7 +55,15 @@ export function brainUser(opts: { prompt: string; flavor?: string; fresh?: boole
   const commas = (line.match(/,/g) || []).length;
   const short = words <= 10 && commas < 2;
   if (short) {
-    return `Short subject. Fill it in (looks, action, place, camera, light). Keep this subject:\n${line}\n\n${flavor}\nWrite the prompt.`;
+    return `Identity only: "${line}"
+Write a COMPLETE new image prompt about that identity. Do not paste the identity as the first two words then a tag dump. Invent NEW specifics:
+- looks: hair, face, body, clothes (costume if they are a magical girl / sailor / maid / etc.)
+- one clear action beat
+- place, time, weather
+- camera and light
+${dirty ? "NSFW MODE: explicit adult 18+ acts ABOUT this identity. Graphic anatomy. Uncensored. Not tasteful, not implied." : "SFW MODE: no sex, no nude, unless those words are already in the identity."}
+${flavor}
+40–90 words. Prompt only. No quotes.`;
   }
   return `Keep EVERY phrase below. Add only missing looks / place / camera / light. Do not rewrite the scene:\n${line}\n\n${flavor}\nWrite the prompt.`;
 }

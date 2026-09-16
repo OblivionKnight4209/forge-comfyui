@@ -1231,7 +1231,7 @@ export function Studio() {
     try {
       const r = await lanBrain({
         prompt: core,
-        flavor,
+        flavor: flavor || (state.nsfwMode ? "sex" : undefined),
         wrap: state.artWrap,
         checkpoint: state.settings.checkpoint,
         fresh: !isShortSubject(line),
@@ -2183,7 +2183,7 @@ export function Studio() {
     <div className="flex min-h-dvh flex-col bg-bg pb-8 text-fg">
       <header className="flex flex-wrap items-center gap-2 px-3 py-3 md:gap-3 md:px-6">
         <p className="text-[15px] font-medium tracking-tight">Forge</p>
-        <span className="text-[11px] tabular-nums text-subtle">206</span>
+        <span className="text-[11px] tabular-nums text-subtle">207</span>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {meta.video ? (
             <select

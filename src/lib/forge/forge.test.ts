@@ -1441,6 +1441,32 @@ describe("wildcards extra", () => {
     assert.ok(t.length > sceneCore(filled).length + 20);
     assert.match(t, /fur|whisker|muzzle|paw|tabby/i);
   });
+  it("Brain on magical girl invents costume instead of echoing the two words", () => {
+    const t = grokExpand({
+      typed: "magical girl",
+      files: DEFAULT_WILDCARDS,
+      seed: 7,
+      family: "sdxl",
+      checkpoint: "DasiwaIllustrious.safetensors",
+      nsfwMode: false,
+    });
+    assert.ok(t.split(/\s+/).length > 18);
+    assert.match(t, /wand|brooch|twin tail|frilly|henshin|circlet|sailor collar|thigh-high|scepter|mahou/i);
+    assert.doesNotMatch(t, /blouse and jeans/i);
+    const filled =
+      "a young adult magical girl, long twin tails, frilly minidress, rooftop, anime illustration, uncensored, explicit, nsfw";
+    assert.equal(sceneCore(filled).toLowerCase(), "magical girl");
+    const again = grokExpand({
+      typed: filled,
+      files: DEFAULT_WILDCARDS,
+      seed: 19,
+      family: "sdxl",
+      checkpoint: "DasiwaIllustrious.safetensors",
+      nsfwMode: true,
+    });
+    assert.match(again, /wand|brooch|costume|skirt|henshin|pussy|sex|knees/i);
+    assert.ok(tokenOverlap(again, filled) < 0.9);
+  });
   it("two Brain seeds on the same subject are not copies", () => {
     const a = grokExpand({
       typed: "cat fight a dog",

@@ -316,6 +316,7 @@ function lookCast(text: string) {
   const monster = /\b(monster|demon|beast|troll|dragon|werewolf|creature|fiend|ogre)\b/.test(t);
   const fight = /\b(fight|fighting|vs|versus|battle|duel|clash|combat|warrior|knight)\b/.test(t);
   const warrior = /\b(warrior|knight|soldier|fighter|champion|guard|paladin|vanguard)\b/.test(t);
+  const magical = /\b(magical girls?|mahou shoujo|pretty cure|precure|henshin|sailor (moon|scout|senshi)|transformation (wand|brooch|stick))\b/.test(t);
   const humanFemale = female || (/\bhuman\b/.test(t) && (female || warrior));
   const humanMale =
     !goblin &&
@@ -331,6 +332,7 @@ function lookCast(text: string) {
     chase: /\b(after|chase|chasing|pursu|hunt|running from|following)\b/.test(t),
     fight,
     warrior,
+    magical,
     animals: animalsIn(t),
     nameOnly: isNameLike(text) && !isScenePrompt(text),
   };
@@ -421,6 +423,52 @@ const ORC_LOOK = {
   head: ["lower tusks, flat nose, small eyes under a heavy brow", "scarred orc face, broken tusk, braided hair"],
   hide: ["green-grey hide", "ash-green skin, battle scars"],
   clothes: ["hide kilt, war harness", "crude iron pauldron, fur cloak"],
+};
+
+const MAGICAL_GIRL = {
+  open: [
+    "a young adult magical girl, 18+",
+    "an adult mahou shoujo mid-henshin, 18+",
+    "a transformed adult magical girl, still in costume, 18+",
+  ],
+  body: [
+    "slim waist, long legs, small rounded chest, idol posture",
+    "soft chest, narrow waist, thighs in over-knee socks",
+    "petite adult frame, long legs, defined collarbones",
+  ],
+  hair: [
+    "waist-length twin tails, vivid pink, huge ribbons",
+    "long blonde odango buns, curling side locks",
+    "silver-blue hair to the hips, glowing streaks, star clips",
+    "electric purple twin tails, oversized bow, bangs in her eyes",
+  ],
+  face: [
+    "huge colored irises, tiny nose, glossy lips, sparkle highlights",
+    "determined eyes, blush stickers, clenched smile",
+    "round adult face, long lashes, star-shaped pupils",
+  ],
+  costume: [
+    "frilly colored minidress, sailor collar, chest bow, white gloves, circlet, transformation brooch",
+    "layered magical skirt, cropped bolero, choker, star earrings, knee boots",
+    "white-and-rose henshin outfit, gold trim, thigh-highs, heart buckle",
+  ],
+  wand: [
+    "star-tipped wand raised overhead",
+    "heart scepter, ribbon trailing",
+    "crystal staff catching the moonlight",
+  ],
+  pose: [
+    "landing from henshin, skirt flipping, light burst from the brooch",
+    "one knee bent, wand pointed, other hand on the hip",
+    "mid-spell, standing on a rooftop, cape-ribbon snapping",
+  ],
+  nsfw: [
+    "henshin outfit torn open, brooch still on, skirt hiked, pussy bare, wand in her fist",
+    "costume top pulled down, nipples out, on her knees, mouth open, thigh-highs only",
+    "fucked from behind in the frilly dress, transformation bow bouncing, cum on the gloves",
+    "on her back, legs spread, magical girl boots on, wand on the floor, explicit sex",
+    "after the fight, costume shredded, tit out, ahegao, juices on the skirt",
+  ],
 };
 
 const WOMAN_LOOK = {
@@ -604,15 +652,39 @@ export function isShortSubject(text: string) {
   return words.length <= 10 && commas === 0;
 }
 
-/** Subject only — so Brain can write a new take instead of echoing the last fill. */
+/** Subject only — Brain writes a new take instead of echoing the last fill. */
 export function sceneCore(text: string): string {
   const t = (text || "").replace(/\s+/g, " ").trim();
   if (!t) return t;
   if (isShortSubject(t)) return t;
+  const low = t.toLowerCase();
+  if (/\bmagical girls?\b|\bmahou shoujo\b/.test(low)) {
+    return /\bmagical girls\b/.test(low) ? "magical girls" : "magical girl";
+  }
+  const clash = t.match(
+    /\b((?:an?\s+)?[a-z][a-z'-]{2,16}\s+(?:fight|fights|fighting|vs|versus)\s+(?:an?\s+)?[a-z][a-z'-]{2,16})\b/i,
+  );
+  if (clash?.[1]) return clash[1];
+  const role = t.match(
+    /\b((?:goblin|orc|demon|monster|ninja|warrior|knight|witch|nun|maid|idol|princess|heroine|sailor [a-z]+)s?)\b/i,
+  );
+  if (role?.[1] && isShortSubject(role[1])) {
+    const who = t.match(/\b((?:adult )?(?:woman|girl|man|male|female)s?)\b/i);
+    if (who?.[1] && !role[1].toLowerCase().includes(who[1].toLowerCase())) {
+      if (/\bfight|vs|versus\b/i.test(t)) return `${role[1]} fight ${who[1]}`;
+    }
+    return role[1];
+  }
   const lead = userLead(isPurpleProse(t) ? recoverScene(t) || t : t);
-  const chunk = (lead.split(",")[0] || lead).trim();
+  const chunk = (lead.split(",")[0] || lead)
+    .replace(
+      /\b(uncensored|explicit|nsfw|adult 18\+|detailed (?:hands|eyes|skin|anatomy|fur)|anime illustration|photograph|sharp focus|highly detailed anime still)\b/gi,
+      "",
+    )
+    .replace(/\s+/g, " ")
+    .trim();
   const words = chunk.split(/\s+/).filter(Boolean);
-  return words.length <= 12 ? chunk : words.slice(0, 10).join(" ");
+  return words.length <= 8 ? chunk : words.slice(0, 6).join(" ");
 }
 
 export function tokenOverlap(a: string, b: string): number {
@@ -697,7 +769,18 @@ function lookFill(text: string, anime: boolean, rng: () => number, nsfwMode = fa
     } else if (c.monster) {
       parts.push(pickFrom(MONSTER_BODY, rng), pickFrom(MONSTER_HEAD, rng), pickFrom(MONSTER_HIDE, rng), pickFrom(MONSTER_HANDS, rng));
     }
-    if (c.girl) {
+    if (c.magical) {
+      parts[0] = pickFrom(MAGICAL_GIRL.open, rng);
+      parts.push(
+        pickFrom(MAGICAL_GIRL.hair, rng),
+        pickFrom(MAGICAL_GIRL.face, rng),
+        pickFrom(MAGICAL_GIRL.body, rng),
+        pickFrom(MAGICAL_GIRL.costume, rng),
+        pickFrom(MAGICAL_GIRL.wand, rng),
+        pickFrom(MAGICAL_GIRL.pose, rng),
+      );
+      if (isAdult(lead) || nsfwMode) parts.push(pickFrom(MAGICAL_GIRL.nsfw, rng));
+    } else if (c.girl) {
       if (c.chase && !c.warrior && !c.fight) {
         parts.push(pickFrom(GIRL_HAIR, rng), pickFrom(GIRL_CLOTHES, rng), pickFrom(GIRL_FACE, rng));
       } else if (c.warrior || c.fight) {
@@ -767,6 +850,18 @@ function extrasFor(text: string, anime: boolean, rng: () => number): {
       place: placeFromText(text, rng) || pickFrom(["dirt yard", "back-alley, trash bags", "overgrown lot", "wet street"], rng),
       shot: pickFrom(["low angle full bodies", "wide action shot", "close on the clash"], rng),
       light: pickFrom(["overcast", "late afternoon dust", "streetlamp"], rng),
+      finish,
+    };
+  }
+  if (/\b(magical girls?|mahou shoujo|henshin|sailor (moon|scout))\b/.test(t)) {
+    return {
+      beat: pickFrom(["henshin burst", "wand pointed at the moon", "ribbons snapping in the wind"], rng),
+      place: pickFrom(
+        ["moonlit city rooftop, water tower, skyline", "night park, glowing circle under her boots", "clock tower ledge, city lights below", "school rooftop after dark, chain-link fence"],
+        rng,
+      ),
+      shot: pickFrom(["low angle full body", "from below, skirt and wand against the moon", "wide rooftop shot"], rng),
+      light: pickFrom(["moonlight and sparkle particles", "pink-gold henshin glow", "city neon from below"], rng),
       finish,
     };
   }
@@ -1273,18 +1368,23 @@ export function grokExpand(opts: {
     (/mix|anime|kitten|illustrious|noob|nai|pony/.test(ckpt) && !ckpt.includes("flux"));
   const nsfw = nsfwWanted(lead, opts.nsfwMode);
   const sexAct = wantsSexAct(lead);
+  const forgeFill =
+    /\b(anime illustration|highly detailed anime still|uncensored, explicit, nsfw|detailed hands, detailed eyes)\b/i.test(
+      lead,
+    );
+  const subject = forgeFill ? sceneCore(lead) || lead : lead;
   if (opts.roll === "random" || /\{[^{}|]+\|/.test(wild)) {
-    const curly = /\{[^{}|]+\|/.test(wild) ? wild : withRandomBlocks(lead, nsfw);
+    const curly = /\{[^{}|]+\|/.test(wild) ? wild : withRandomBlocks(subject, nsfw);
     const flat = flattenPrompt(curly, opts.seed);
-    if (!tooClose(flat, lead)) return flat;
+    if (!tooClose(flat, subject)) return flat;
   }
   const rng = mulberry32(opts.seed + 17);
   let out: string;
-  if (sexAct && isShortSubject(lead)) {
+  if (sexAct && isShortSubject(subject)) {
     out = flattenPrompt(
       writePrompt({
         flavor: "sex",
-        existing: lead,
+        existing: subject,
         files: opts.files,
         seed: opts.seed,
         family: opts.family,
@@ -1292,21 +1392,21 @@ export function grokExpand(opts: {
       }),
       opts.seed,
     );
-  } else if (isShortSubject(lead)) {
-    out = lookFill(lead, anime, rng, opts.nsfwMode);
+  } else if (isShortSubject(subject) || forgeFill) {
+    out = lookFill(subject, anime, rng, opts.nsfwMode);
   } else {
     out = fillGaps(lead, anime, rng, opts.nsfwMode);
   }
   const thin = (s: string) =>
-    tooClose(s, lead) || tooClose(s, raw) || s.split(/\s+/).length <= lead.split(/\s+/).length + 4;
-  if (thin(out) && isShortSubject(lead)) {
-    out = lookFill(lead, anime, rng, opts.nsfwMode);
+    tooClose(s, subject) || tooClose(s, raw) || s.split(/\s+/).length <= subject.split(/\s+/).length + 4;
+  if (thin(out) && (isShortSubject(subject) || forgeFill)) {
+    out = lookFill(subject, anime, rng, opts.nsfwMode);
   }
-  if (thin(out) && isShortSubject(lead)) {
-    out = grokFill(lead, anime, mulberry32(opts.seed + 31));
+  if (thin(out) && isShortSubject(subject)) {
+    out = grokFill(subject, anime, mulberry32(opts.seed + 31));
   }
-  if (thin(out) && isShortSubject(lead)) {
-    out = flattenPrompt(withRandomBlocks(lead, nsfw), opts.seed);
+  if (thin(out) && isShortSubject(subject)) {
+    out = flattenPrompt(withRandomBlocks(subject, nsfw), opts.seed);
   }
   if (nsfw && !/\buncensored\b/i.test(out)) out = `${out}, uncensored, explicit, nsfw, adult 18+`;
   return out;
