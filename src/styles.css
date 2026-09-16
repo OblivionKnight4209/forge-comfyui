@@ -77,6 +77,13 @@
 [data-sonner-toast][data-type="success"],
 [data-sonner-toast][data-type="info"] {
   display: none !important;
+  pointer-events: none !important;
+}
+[data-sonner-toaster] {
+  pointer-events: none;
+}
+[data-sonner-toast] {
+  pointer-events: auto;
 }
 
 .forge-stage {

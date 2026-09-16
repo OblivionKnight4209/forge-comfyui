@@ -1213,6 +1213,7 @@ export function Studio() {
   }
 
   async function writeIntoBox(flavor: PromptFlavor) {
+    try {
     const state = useForge.getState();
     const raw =
       state.mode === "i2i"
@@ -1264,6 +1265,10 @@ export function Studio() {
     requestAnimationFrame(() => {
       document.getElementById("forge-write-dock")?.scrollIntoView({ block: "nearest", behavior: "smooth" });
     });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Write failed";
+      logForge("error", "Write", msg);
+    }
   }
 
   async function insertWildcardPick(name: string) {
@@ -2115,7 +2120,7 @@ export function Studio() {
     <div className="flex min-h-dvh flex-col bg-bg pb-8 text-fg">
       <header className="flex items-center gap-3 px-4 py-3 md:px-6">
         <p className="text-[15px] font-medium tracking-tight">Forge</p>
-        <span className="text-[11px] tabular-nums text-subtle">198</span>
+        <span className="text-[11px] tabular-nums text-subtle">199</span>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {meta.video ? (
             <select
@@ -2603,15 +2608,15 @@ export function Studio() {
             </span>
           </button>
         )}
-        <div className={cn("absolute left-3 top-14 z-[70] w-[7.5rem] space-y-1", tab === "combine" && "hidden")}>
-          <p className="text-[10px] uppercase tracking-wide text-muted">
+        <div className={cn("pointer-events-none absolute left-3 top-14 z-[70] w-[7.5rem] space-y-1", (tab === "combine" || (!media.length && !sourceSrc)) && "hidden")}>
+          <p className="pointer-events-none text-[10px] uppercase tracking-wide text-muted">
             {mode === "ref2i" ? "Combine" : tab === "video" ? "Frame 1" : "Edit source"}
           </p>
           {(mode === "ref2i" ? media.filter((m) => m.kind === "image").slice(0, 5) : media.slice(0, 1)).map((m, i) => (
             <button
               key={m.id}
               type="button"
-              className="block size-[7.5rem] overflow-hidden rounded-lg bg-raised ring-1 ring-line"
+              className="pointer-events-auto block size-[7.5rem] overflow-hidden rounded-lg bg-raised ring-1 ring-line"
               onClick={() => {
                 if (mode === "ref2i" || tab === "combine") {
                   useForge.getState().removeMedia(m.id);
@@ -2642,7 +2647,7 @@ export function Studio() {
           ))}
           <button
             type="button"
-            className="flex size-[7.5rem] flex-col items-center justify-center gap-1 rounded-lg bg-raised px-2 text-center text-[11px] text-subtle ring-1 ring-line"
+            className="pointer-events-auto flex size-[7.5rem] flex-col items-center justify-center gap-1 rounded-lg bg-raised px-2 text-center text-[11px] text-subtle ring-1 ring-line"
             onClick={() => {
               if (tab === "combine" || mode === "ref2i") {
                 useForge.getState().setMode("ref2i");
@@ -2671,7 +2676,7 @@ export function Studio() {
             {mode === "ref2i" ? "Add ref" : tab === "video" ? "Add still" : "Add photo"}
           </button>
           {sourceSrc && mode !== "ref2i" ? (
-            <Button size="sm" variant="secondary" className="w-full" onClick={() => void deleteThisStill(sourceSrc)}>
+            <Button size="sm" variant="secondary" className="pointer-events-auto w-full" onClick={() => void deleteThisStill(sourceSrc)}>
               <Trash2 />
               Shred this
             </Button>
@@ -2680,18 +2685,14 @@ export function Studio() {
             <Button
               size="sm"
               variant="secondary"
-              className="w-full"
-              onClick={() => {
-                useForge.getState().setMedia([]);
-                useForge.getState().setMode("t2i");
-              }}
+              className="pointer-events-auto w-full"
             >
               Clear refs
             </Button>
           ) : null}
         </div>
-        <div className="absolute inset-x-0 bottom-4 z-10 flex justify-center px-3">
-          <div className="forge-hover-bar">
+        <div className="pointer-events-none absolute inset-x-0 bottom-4 z-10 flex justify-center px-3">
+          <div className="forge-hover-bar pointer-events-auto">
           <Button
             size="icon"
             variant="secondary"
@@ -3020,7 +3021,7 @@ export function Studio() {
       ) : null}
 
       <div className={cn("bg-bg px-3 pb-4 pt-2 md:px-5", tab === "errors" && "hidden")}>
-        <div className="forge-composer mx-auto max-w-3xl rounded-[28px] p-3">
+        <div className="forge-composer relative z-40 mx-auto max-w-3xl rounded-[28px] p-3">
           {mode === "i2i" && tab !== "mixes" ? (
             <div className="space-y-2 px-2 py-2">
               <div className="flex flex-wrap items-center gap-2">
@@ -3418,8 +3419,7 @@ export function Studio() {
                 />
               </div>
             )}
-            {dock === "look" ? (
-            <>
+            )}
             <Button
               type="button"
               variant={seedLocked ? "default" : "ghost"}
@@ -3511,8 +3511,6 @@ export function Studio() {
             </Button>
               </>
             ) : null}
-            </>
-            ) : null}
             <Button
               type="button"
               variant={dock === "look" ? "default" : "secondary"}
@@ -3529,9 +3527,7 @@ export function Studio() {
               className="rounded-full"
               onClick={() => {
                 setChipTab("write");
-                setDock("write");
-                const menu = writeMenus().find((m) => m.id === writeCat);
-                void writeIntoBox(menu?.surprise ?? "enhance");
+                setDock((d) => (d === "write" ? "off" : "write"));
               }}
             >
               <Sparkles />
@@ -3544,6 +3540,7 @@ export function Studio() {
               style={{ WebkitTapHighlightColor: "transparent", touchAction: "manipulation" }}
               title="Sends the box as-is. Tap Brain or Write to fill it first."
               onTouchEnd={(e) => {
+                e.preventDefault();
                 e.stopPropagation();
                 fireGenerate();
               }}
@@ -4053,7 +4050,7 @@ export function Studio() {
       </Sheet>
       {zoom ? (
         <div className="fixed inset-0 z-50 flex flex-col bg-black/95">
-          <div className="flex items-center gap-2 p-3 text-sm text-white/70">
+          <div className="relative z-10 flex flex-wrap items-center gap-2 p-3 text-sm text-white/70">
             <span>
               {zoom.name ?? "Still"} · {Math.max(1, gallery.findIndex((g) => g.src === zoom.src) + 1)}/{gallery.length || 1} · arrows · Esc
             </span>
