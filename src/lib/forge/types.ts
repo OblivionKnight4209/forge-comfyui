@@ -315,17 +315,25 @@ export type ComfyStatus = {
   taggerModels: string[];
 };
 
+export function ckptBase(name: string) {
+  return (name || "").replace(/\\/g, "/").split("/").pop() || name;
+}
+
 export function resolveCkpt(want: string, list: string[]): string {
   const real = list.filter(isRealCheckpoint);
   if (!real.length) return want;
   if (want && real.includes(want)) return want;
-  const base = (want || "").replace(/\\/g, "/").split("/").pop() ?? "";
-  if (!base || !isRealCheckpoint(want || base)) return real[0] ?? want;
-  const hit =
-    real.find((a) => a === base) ??
-    real.find((a) => a.replace(/\\/g, "/").endsWith(`/${base}`)) ??
-    real.find((a) => (a.replace(/\\/g, "/").split("/").pop() ?? "") === base);
-  return hit ?? real[0] ?? want;
+  const base = ckptBase(want);
+  if (base) {
+    const lower = base.toLowerCase();
+    const hit =
+      real.find((a) => a === base) ??
+      real.find((a) => a.replace(/\\/g, "/").endsWith(`/${base}`)) ??
+      real.find((a) => ckptBase(a).toLowerCase() === lower);
+    if (hit) return hit;
+    if (want) return want;
+  }
+  return real[0] ?? want;
 }
 
 export function canEditPhoto(name: string) {

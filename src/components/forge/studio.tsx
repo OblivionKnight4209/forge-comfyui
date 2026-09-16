@@ -1063,9 +1063,17 @@ export function Studio() {
 
   function applyCheckpoint(checkpoint: string) {
     if (!checkpoint) return;
-    useForge.getState().setSettings(settingsForCheckpoint(checkpoint));
+    const st = useForge.getState();
+    st.setSettings({
+      ...settingsForCheckpoint(checkpoint),
+      checkpoint,
+      sdxlCheckpoint: checkpoint,
+      stillLoader: "checkpoint",
+    });
     const fam = guessArch(checkpoint);
-    toast.success(
+    logForge(
+      "info",
+      "Mix",
       `${checkpoint.split("/").pop()} · ${fam === "sd15" ? "1.5" : fam === "flux" ? "Flux" : "XL"}`,
     );
   }
@@ -2108,19 +2116,29 @@ export function Studio() {
   const ckpts = comfy?.checkpoints ?? [];
   const unets = comfy?.unets ?? [];
   const listedCkpts = (() => {
-    const real = ckpts.filter(isRealCheckpoint);
+    const real = ckpts.filter(isImageCheckpoint);
     const styled = ckptStyle === "all" ? real : real.filter((n) => checkpointMatchesStyle(n, ckptStyle));
     const pool = styled.length ? styled : real;
+    const seen = new Set<string>();
+    const uniq: string[] = [];
+    for (const n of pool) {
+      const b = (n.replace(/\\/g, "/").split("/").pop() || n).toLowerCase();
+      if (seen.has(b)) continue;
+      seen.add(b);
+      uniq.push(n);
+    }
     const cur = settings.checkpoint;
-    if (cur && !pool.includes(cur)) return [cur, ...pool];
-    return pool;
+    if (cur && !uniq.some((n) => n === cur || n.replace(/\\/g, "/").split("/").pop() === cur.replace(/\\/g, "/").split("/").pop())) {
+      uniq.unshift(cur);
+    }
+    return uniq;
   })();
 
   return (
     <div className="flex min-h-dvh flex-col bg-bg pb-8 text-fg">
       <header className="flex items-center gap-3 px-4 py-3 md:px-6">
         <p className="text-[15px] font-medium tracking-tight">Forge</p>
-        <span className="text-[11px] tabular-nums text-subtle">200</span>
+        <span className="text-[11px] tabular-nums text-subtle">201</span>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {meta.video ? (
             <select
@@ -2146,28 +2164,23 @@ export function Studio() {
                 </option>
               ))}
             </select>
-          ) : settings.stillLoader === "flux-unet" ? (
-            <select
-              aria-label="Flux UNET"
-              className="h-9 min-w-0 flex-1 truncate rounded-full bg-raised px-3 text-xs"
-              value={settings.fluxUnet}
-              onChange={(e) => useForge.getState().setSettings({ fluxUnet: e.target.value })}
-            >
-              {(unets.length ? unets : [settings.fluxUnet].filter(Boolean)).map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
           ) : (
             <select
               aria-label="Checkpoint"
               className="h-9 min-w-0 flex-1 truncate rounded-full bg-raised px-3 text-xs"
-              value={settings.checkpoint}
+              value={
+                listedCkpts.find((n) => n === settings.checkpoint) ||
+                listedCkpts.find(
+                  (n) =>
+                    (n.replace(/\\/g, "/").split("/").pop() || n) ===
+                    (settings.checkpoint.replace(/\\/g, "/").split("/").pop() || settings.checkpoint),
+                ) ||
+                settings.checkpoint
+              }
               onChange={(e) => applyCheckpoint(e.target.value)}
             >
               <option value="">Pick mix · {listedCkpts.length}</option>
-              {(listedCkpts.length ? listedCkpts : [settings.checkpoint].filter(Boolean)).map((n) => (
+              {listedCkpts.map((n) => (
                 <option key={n} value={n}>
                   {n.split("/").pop()} · {guessArch(n) === "sd15" ? "1.5" : guessArch(n) === "flux" ? "Flux" : "XL"}
                 </option>

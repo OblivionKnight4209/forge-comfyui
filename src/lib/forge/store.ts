@@ -18,6 +18,7 @@ import {
   pickWanVae,
   pairWanUnets,
   sameStill,
+  ckptBase,
   type Aspect,
   type ComfySettings,
   type ComfyStatus,
@@ -122,8 +123,15 @@ type ForgeState = {
 
 function pickExisting(current: string, list: string[]) {
   if (!list.length) return current;
-  if (current && list.includes(current)) return current;
-  return list[0] ?? current;
+  if (!current) return list[0] ?? "";
+  if (list.includes(current)) return current;
+  const base = current.replace(/\\/g, "/").split("/").pop() || current;
+  const lower = base.toLowerCase();
+  return (
+    list.find((a) => a === base) ||
+    list.find((a) => (a.replace(/\\/g, "/").split("/").pop() || "").toLowerCase() === lower) ||
+    current
+  );
 }
 
 export const useForge = create<ForgeState>()(
@@ -359,16 +367,29 @@ export const useForge = create<ForgeState>()(
         const cur = get().settings;
         const checkpoint = pickExisting(cur.checkpoint || cur.sdxlCheckpoint, status.checkpoints);
         if (status.checkpoints.length && checkpoint) {
-          const preset = checkpoint !== (cur.checkpoint || cur.sdxlCheckpoint) ? settingsForCheckpoint(checkpoint) : {};
-          set({
-            settings: {
-              ...cur,
-              ...preset,
-              checkpoint,
-              sdxlCheckpoint: checkpoint,
-              stillLoader: "checkpoint",
-            },
-          });
+          const same =
+            ckptBase(checkpoint).toLowerCase() ===
+            ckptBase(cur.checkpoint || cur.sdxlCheckpoint || "").toLowerCase();
+          if (!same && !(cur.checkpoint || cur.sdxlCheckpoint)) {
+            const preset = settingsForCheckpoint(checkpoint);
+            set({
+              settings: {
+                ...cur,
+                ...preset,
+                checkpoint,
+                sdxlCheckpoint: checkpoint,
+                stillLoader: "checkpoint",
+              },
+            });
+          } else if (!same) {
+            set({
+              settings: {
+                ...get().settings,
+                checkpoint,
+                sdxlCheckpoint: checkpoint,
+              },
+            });
+          }
         }
         if (!status.ok) return;
         const fluxUnet =
@@ -398,24 +419,22 @@ export const useForge = create<ForgeState>()(
             status.clips.filter((c) => /t5/i.test(c)),
           ) || pickExisting(cur.fluxT5, status.clips);
         const wanClip = pickWanClip(status.clips, cur.wanClip);
-        const checkpointChanged = checkpoint !== (cur.checkpoint || cur.sdxlCheckpoint);
-        const preset = checkpointChanged && checkpoint ? settingsForCheckpoint(checkpoint) : {};
+        const live = get().settings;
         set({
           settings: {
-            ...cur,
-            ...preset,
-            checkpoint,
-            sdxlCheckpoint: checkpoint,
-            clipSkip: cur.clipSkip ?? 2,
-            hires: cur.hires ?? false,
+            ...live,
+            clipSkip: live.clipSkip ?? 2,
+            hires: live.hires ?? false,
             fluxUnet,
             fluxVae,
             fluxClipL: clipL,
             fluxT5: t5,
-            wanUnet: wanPicked,
+            wanUnet: wanPicked || live.wanUnet,
             wanUnetLow,
             wanVae,
             wanClip,
+            checkpoint: live.checkpoint || checkpoint,
+            sdxlCheckpoint: live.checkpoint || checkpoint,
           },
         });
       },
