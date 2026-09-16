@@ -95,7 +95,7 @@ import { PROMPT_FLAVORS, expandPrompt, grokExpand, writeIdeas, writePrompt, isAd
 import { composeI2iPrompt, expandEditFields } from "@/lib/forge/edit-prompt";
 import { isVideoName, mediaMime, withVideoDataUrl } from "@/lib/forge/media-mime";
 import { writeExtreme, writeDarkSet, writeTabooSet, writeHorrorSet, isWashed, NSFW_TYPES, nsfwGroup, writeMenus, WHO_BITS, WHERE_BITS, MORE_BITS, COMIC_BITS, EVIL_BITS, FACE_BITS, BODY_BITS, CLOTHES_BITS, PLACE_BITS, CAM_BITS, LIGHT_BITS } from "@/lib/forge/extreme";
-import { COMIC_LAYOUTS, COMIC_INK, buildComicPrompt, formatComicScript } from "@/lib/forge/comic";
+import { COMIC_LAYOUTS, COMIC_INK, buildComicPrompt, formatComicScript, isPanelScript } from "@/lib/forge/comic";
 import {
   apiToUiWorkflow,
   buildApiWorkflow,
@@ -1408,27 +1408,37 @@ export function Studio() {
     );
     const first = locals.find((t) => t && t !== core && t.length > core.length + 8) || locals[0] || core;
     skipIdeaRefresh.current = true;
+    setDock("write");
+    const keepBox = !isShortSubject(line) && line.split(/\s+/).length > 12;
     if (tab === "comic") {
       const script = formatComicScript(core, comicLayout, { nsfw: state.nsfwMode, seed });
+      if (keepBox || isPanelScript(line)) {
+        setIdeas([script]);
+        logForge("info", "Brain", "New page beats — tap one to use. Box left as-is.");
+        return true;
+      }
       state.setPrompt(script);
       setIdeas([script]);
-      setDock("write");
       logForge("info", "Brain", `Comic beats for “${core.slice(0, 40)}”`);
       return true;
     }
-    state.setPrompt(first);
-    if (state.mode === "ref2i") state.setRefPrompt(first);
-    setIdeas(locals.filter(Boolean).slice(0, 3));
-    setDock("write");
+    if (keepBox) {
+      setIdeas(locals.filter(Boolean).slice(0, 3));
+      logForge("info", "Brain", "New takes — tap one to put it in the box");
+    } else {
+      state.setPrompt(first);
+      if (state.mode === "ref2i") state.setRefPrompt(first);
+      setIdeas(locals.filter(Boolean).slice(0, 3));
+      logForge("info", "Brain", `Filled “${core.slice(0, 40)}”`);
+    }
     setBrainBusy(true);
-    logForge("info", "Brain", `Filled “${core.slice(0, 40)}”`);
     try {
       const r = await lanBrain({
         prompt: core,
         flavor: flavor || (state.nsfwMode ? "sex" : undefined),
         wrap: state.artWrap,
         checkpoint: state.settings.checkpoint,
-        fresh: !isShortSubject(line),
+        fresh: keepBox,
         seed,
         nsfwMode: state.nsfwMode,
       });
@@ -1445,14 +1455,21 @@ export function Studio() {
       const same = tokenOverlap(text, line) > 0.78 || tokenOverlap(text, first) > 0.9;
       const thin = text.split(/\s+/).length < 12;
       if (lost || same || thin) {
-        logForge("info", "Brain", "Ollama echoed — kept the local fill");
+        logForge("info", "Brain", "Ollama echoed — kept this set");
         return true;
       }
       skipIdeaRefresh.current = true;
-      useForge.getState().setPrompt(text);
-      if (state.mode === "ref2i") useForge.getState().setRefPrompt(text);
-      setIdeas([text, ...locals.filter((t) => tokenOverlap(t, text) < 0.82)].slice(0, 3));
-      logForge("info", "Brain", `Ollama · ${r.model.split("/").pop()}`);
+      setIdeas((prev) => {
+        const extra = [text, ...locals, ...prev].filter(Boolean);
+        const out: string[] = [];
+        for (const t of extra) {
+          if (out.some((x) => tokenOverlap(x, t) > 0.82)) continue;
+          out.push(t);
+          if (out.length >= 3) break;
+        }
+        return out;
+      });
+      logForge("info", "Brain", `Ollama added a take · ${r.model.split("/").pop()} — tap to use`);
       return true;
     } finally {
       setBrainBusy(false);
@@ -2489,7 +2506,7 @@ export function Studio() {
     <div className="flex min-h-dvh flex-col bg-bg pb-8 text-fg">
       <header className="flex flex-wrap items-center gap-2 px-3 py-3 md:gap-3 md:px-6">
         <p className="text-[15px] font-medium tracking-tight">Forge</p>
-        <span className="text-[11px] tabular-nums text-subtle">215</span>
+        <span className="text-[11px] tabular-nums text-subtle">216</span>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {meta.video ? (
             <select
