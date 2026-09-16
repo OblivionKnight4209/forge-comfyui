@@ -1,5 +1,5 @@
 import type { WildcardFile } from "./types";
-import { writeExtreme, writeTabooSet, writeHorrorSet } from "./extreme";
+import { writeExtreme, writeTabooSet, writeHorrorSet, isWashed } from "./extreme";
 
 export const WILDCARD_TOKEN = /__([a-zA-Z0-9][a-zA-Z0-9 _./+-]{0,120}?)__/g;
 
@@ -599,8 +599,15 @@ export function sceneCore(text: string): string {
   const lead = userLead(isPurpleProse(t) ? recoverScene(t) || t : t);
   const chunk = (lead.split(",")[0] || lead).trim();
   const words = chunk.split(/\s+/).filter(Boolean);
-  if (words.length <= 12) return chunk;
-  return words.slice(0, 10).join(" ");
+  const core = words.length <= 12 ? chunk : words.slice(0, 10).join(" ");
+  const flags: string[] = [];
+  if (isAdult(t)) flags.push("nsfw", "explicit", "uncensored", "adult 18+");
+  if (/\b(rape|forced|noncon|non-con)\b/i.test(t)) flags.push("forced");
+  if (/\b(gore|blood|stab|horror|viscera)\b/i.test(t)) flags.push("gore");
+  if (/\b(bdsm|bondage|hogtie|whip)\b/i.test(t)) flags.push("bdsm");
+  if (/\b(gay|yaoi|mlm|femboy)\b/i.test(t)) flags.push("gay");
+  if (/\b(yuri|lesbian|wlw)\b/i.test(t)) flags.push("yuri");
+  return flags.length ? `${core}, ${[...new Set(flags)].join(", ")}` : core;
 }
 
 export function tokenOverlap(a: string, b: string): number {
@@ -649,8 +656,12 @@ export function fillGaps(text: string, anime: boolean, rng: () => number): strin
   if (!/anime illustration|photograph|sharp focus|highly detailed/i.test(lead)) {
     extra.push(anime ? "anime illustration" : "photograph");
   }
+  if (isAdult(lead)) {
+    if (!/\buncensored\b/i.test(lead)) extra.push("uncensored", "explicit", "nsfw", "adult 18+");
+    extra.push("detailed anatomy");
+  }
   if (!extra.length) return lead;
-  return keepNeutral(joinScene([lead, ...extra], isAdult(lead)), lead, "enhance");
+  return keepNeutral(joinScene([lead, ...extra], isAdult(lead)), lead, isAdult(lead) ? "sex" : "enhance");
 }
 
 function lookFill(text: string, anime: boolean, rng: () => number): string {
@@ -1280,6 +1291,23 @@ export function grokExpand(opts: {
   }
   if (thin(out) && isShortSubject(lead)) {
     out = flattenPrompt(withRandomBlocks(lead, nsfw), opts.seed);
+  }
+  if (nsfw) {
+    if (!/\buncensored\b/i.test(out)) out = `${out}, uncensored, explicit, nsfw, adult 18+`;
+    if (isWashed(out) && isShortSubject(lead)) {
+      out = flattenPrompt(
+        writePrompt({
+          flavor: "sex",
+          existing: lead,
+          files: opts.files,
+          seed: opts.seed + 3,
+          family: opts.family,
+          checkpoint: opts.checkpoint,
+        }),
+        opts.seed,
+      );
+      if (!/\buncensored\b/i.test(out)) out = `${out}, uncensored, explicit, nsfw, adult 18+`;
+    }
   }
   return out;
 }

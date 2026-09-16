@@ -1308,6 +1308,23 @@ describe("wildcards extra", () => {
     assert.match(sceneCore(filled), /cat fight a dog/i);
     assert.doesNotMatch(sceneCore(filled), /overcast|detailed fur/i);
   });
+  it("sceneCore keeps nsfw flags so Brain cannot SFW-wash a reroll", () => {
+    const filled = "sexy anime girl with barely any clothes, silk, nsfw, explicit, uncensored, adult 18+, window light";
+    const c = sceneCore(filled);
+    assert.match(c, /sexy anime girl/i);
+    assert.match(c, /nsfw|explicit|uncensored/i);
+  });
+  it("adult prompt stays uncensored after expand", () => {
+    const t = grokExpand({
+      typed: "sexy anime girl, nsfw, explicit",
+      files: DEFAULT_WILDCARDS,
+      seed: 8,
+      family: "sdxl",
+      checkpoint: "DasiwaIllustrious.safetensors",
+    });
+    assert.match(t, /uncensored/i);
+    assert.doesNotMatch(t, /tasteful|implied nudity|fade to black/i);
+  });
   it("two Brain seeds on the same subject are not copies", () => {
     const a = grokExpand({
       typed: "cat fight a dog",

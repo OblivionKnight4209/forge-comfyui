@@ -33,8 +33,8 @@ Rules:
 - Output ONLY the prompt. No quotes, no title, no "sure", no markdown.
 - Concrete nouns. No "breathtaking masterpiece / 8k / raw cinematic vulnerability".
 - Do not add sex, BDSM, or gore unless the user asked.
-- If they asked sex/dark/horror: be explicit, anatomical, uncensored. No cute fade-out.
-- Do not turn a fight/monster/animal scene into porn.
+- If they asked sex/sexy/nude/nsfw/dark/horror: stay graphic. Anatomical. Uncensored. Never "tasteful", "implied", "artistic nude", "fade to black", mosaic, or bar censor.
+- Do not turn a fight/monster/animal scene into porn UNLESS they also wrote nsfw/sex/explicit.
 - Do not invent a different main subject.
 - 40–140 words. Comma-separated phrases are fine.
 ${wrap ? `- Visual wrap they picked: ${wrap}. Weave it in, do not replace the scene.` : ""}
@@ -45,7 +45,8 @@ export function brainUser(opts: { prompt: string; flavor?: string; fresh?: boole
   const line = opts.prompt.trim() || "invent a striking adult scene";
   const flavor = opts.flavor ? `Lean: ${opts.flavor}.` : "";
   if (opts.fresh) {
-    return `NEW TAKE. Same subject, different looks / place / camera / light / beat. Do not copy the last prompt.\nSubject:\n${line}\n\n${flavor}\nWrite a new prompt.`;
+    const adult = /\b(nsfw|sex|sexy|nude|explicit|fuck|hentai|porn)\b/i.test(line);
+    return `NEW TAKE. Same subject, different looks / place / camera / light / beat. Do not copy the last prompt.\nSubject:\n${line}\n\n${flavor}\n${adult ? "Stay explicit, uncensored, adult 18+. Do not SFW-wash.\n" : ""}Write a new prompt.`;
   }
   const words = line.split(/\s+/).filter(Boolean).length;
   const commas = (line.match(/,/g) || []).length;
