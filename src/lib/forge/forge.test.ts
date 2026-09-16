@@ -1664,3 +1664,18 @@ describe("live room", () => {
     assert.equal(isLanRemote(), false);
   });
 });
+
+describe("comic page builder", () => {
+  it("splits P1/P2 beats", async () => {
+    const { splitComicBeats, buildComicPrompt } = await import("./comic.ts");
+    const beats = splitComicBeats("P1: she walks in\nP2: he looks up\nP3: they kiss\nP4: rain", 4);
+    assert.equal(beats.length, 4);
+    assert.match(beats[0] || "", /walks/i);
+    const page = buildComicPrompt("cat fights a dog\n\nthe dog bites back\n\nrain", "2x2", "manga ink");
+    assert.match(page, /panel 1/i);
+    assert.match(page, /panel 2/i);
+    assert.match(page, /2 by 2|gutters/i);
+    assert.match(page, /same characters/i);
+    assert.match(page, /not a photograph/i);
+  });
+});

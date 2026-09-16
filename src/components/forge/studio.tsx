@@ -86,6 +86,7 @@ import { PROMPT_FLAVORS, expandPrompt, grokExpand, writeIdeas, writePrompt, isAd
 import { composeI2iPrompt, expandEditFields } from "@/lib/forge/edit-prompt";
 import { isVideoName, mediaMime, withVideoDataUrl } from "@/lib/forge/media-mime";
 import { writeExtreme, writeDarkSet, writeTabooSet, writeHorrorSet, isWashed, NSFW_TYPES, nsfwGroup, writeMenus, WHO_BITS, WHERE_BITS, MORE_BITS, COMIC_BITS, EVIL_BITS, FACE_BITS, BODY_BITS, CLOTHES_BITS, PLACE_BITS, CAM_BITS, LIGHT_BITS } from "@/lib/forge/extreme";
+import { COMIC_LAYOUTS, COMIC_INK, buildComicPrompt } from "@/lib/forge/comic";
 import {
   apiToUiWorkflow,
   buildApiWorkflow,
@@ -179,7 +180,9 @@ export function Studio() {
     models: [],
     message: "Ollama off",
   });
-  const [tab, setTab] = useState<"image" | "combine" | "video" | "errors" | "mixes">("image");
+  const [tab, setTab] = useState<"image" | "combine" | "comic" | "video" | "errors" | "mixes">("image");
+  const [comicLayout, setComicLayout] = useState("2x2");
+  const [comicInk, setComicInk] = useState("manga-ink");
   const [mixPick, setMixPick] = useState<string[]>([]);
   const [mixJobIds, setMixJobIds] = useState<string[]>([]);
   const [mixQ, setMixQ] = useState("");
@@ -1431,10 +1434,30 @@ export function Studio() {
     const state = useForge.getState();
     const photoOn = state.media.some((m) => m.kind === "image");
     const runMode: typeof state.mode =
-      tab === "video" ? (photoOn ? "i2v" : "t2v") : photoOn && state.mode !== "ref2i" && state.mode !== "i2i" ? "i2i" : state.mode;
+      tab === "video"
+        ? photoOn
+          ? "i2v"
+          : "t2v"
+        : tab === "comic"
+          ? state.media.filter((m) => m.kind === "image").length >= 2
+            ? "ref2i"
+            : "t2i"
+        : photoOn && state.mode !== "ref2i" && state.mode !== "i2i"
+          ? "i2i"
+          : state.mode;
     const typed = (promptRef.current?.value || "").trim();
+    const comicPage =
+      tab === "comic"
+        ? buildComicPrompt(
+            state.prompt || typed,
+            comicLayout,
+            COMIC_INK.find((x) => x.id === comicInk)?.tags || "",
+          )
+        : "";
     const userPrompt =
-      runMode === "i2i"
+      tab === "comic"
+        ? comicPage
+        : runMode === "i2i"
         ? composeI2iPrompt(
             state.prompt || typed,
             { remove: state.editRemove, add: state.editAdd, change: state.editChange },
@@ -1472,7 +1495,7 @@ export function Studio() {
         }
         idx += 1;
       }
-      if ((tab === "combine" || state.mode === "ref2i") && images.length < 2) {
+      if ((tab === "combine" || (state.mode === "ref2i" && tab !== "comic")) && images.length < 2) {
         const msg = "Combine needs 2 different photos. Tap another in Results — not the same one twice.";
         setQueueBanner(msg);
         logForge("warn", "Combine", msg);
@@ -1560,6 +1583,9 @@ export function Studio() {
     if (tab === "video") {
       useForge.getState().setMode(photoOn ? "i2v" : "t2v");
       useForge.getState().setSoundOn(true);
+    } else if (tab === "comic") {
+      const n = state.media.filter((m) => m.kind === "image").length;
+      useForge.getState().setMode(n >= 2 ? "ref2i" : "t2i");
     } else if (photoOn && !MODE_META[state.mode].video && state.mode !== "ref2i" && state.mode !== "i2i") {
       useForge.getState().setMode("i2i");
     }
@@ -1568,6 +1594,10 @@ export function Studio() {
         ? photoOn
           ? "i2v"
           : "t2v"
+        : tab === "comic"
+          ? state.media.filter((m) => m.kind === "image").length >= 2
+            ? "ref2i"
+            : "t2i"
         : photoOn && !MODE_META[useForge.getState().mode].video && useForge.getState().mode !== "ref2i"
           ? "i2i"
           : useForge.getState().mode;
@@ -1842,6 +1872,10 @@ export function Studio() {
     }
     let denoiseNow = state.denoise;
     let sent = flattenPrompt(parsed.expanded, nextSeed);
+    if (tab === "comic") {
+      const ink = COMIC_INK.find((x) => x.id === comicInk)?.tags || "";
+      sent = flattenPrompt(buildComicPrompt(state.prompt || parsed.expanded, comicLayout, ink), nextSeed);
+    }
     if (runMode === "i2i" && !/same art style/i.test(sent)) {
       sent = `${sent}, same art style, same rendering, same lighting, same colors, do not restyle`;
     }
@@ -1853,8 +1887,11 @@ export function Studio() {
         settingsNow = { ...settingsNow, hires: true };
       }
     }
-    if (runMode === "ref2i") {
+    if (runMode === "ref2i" && tab !== "comic") {
       finalPrompt = `unified single scene combining the reference photos, not a split collage, not a grid, ${finalPrompt}`;
+    }
+    if (tab === "comic" && runMode === "ref2i") {
+      finalPrompt = `arrange the reference photos as panels on one comic page with black gutters, sequential, ${finalPrompt}`;
     }
     if (runMode === "i2i" || runMode === "ref2i") {
       const change = /\b(remove|undress|take off|strip|add |change |replace |delete |put on|clothes|shirt|dress|nude|naked)\b/i.test(
@@ -2078,7 +2115,7 @@ export function Studio() {
     <div className="flex min-h-dvh flex-col bg-bg pb-8 text-fg">
       <header className="flex items-center gap-3 px-4 py-3 md:px-6">
         <p className="text-[15px] font-medium tracking-tight">Forge</p>
-        <span className="text-[11px] tabular-nums text-subtle">195</span>
+        <span className="text-[11px] tabular-nums text-subtle">196</span>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {meta.video ? (
             <select
@@ -2235,7 +2272,7 @@ export function Studio() {
 
       <div className="flex flex-col gap-1 px-2 md:px-4">
         <div className="flex items-center gap-0.5">
-          {(["image", "video", "combine", "mixes"] as const).map((g) => (
+          {(["image", "video", "combine", "comic", "mixes"] as const).map((g) => (
             <button
               key={g}
               type="button"
@@ -2282,6 +2319,12 @@ export function Studio() {
                   });
                   return;
                 }
+                if (g === "comic") {
+                  st.setMode("t2i");
+                  const lay = COMIC_LAYOUTS.find((l) => l.id === comicLayout) || COMIC_LAYOUTS[2];
+                  st.setAspect(lay.aspect);
+                  return;
+                }
                 if (g !== "mixes") {
                   st.setMedia([]);
                   st.setRefPrompt("");
@@ -2300,7 +2343,15 @@ export function Studio() {
                   : "text-subtle hover:text-fg",
               )}
             >
-              {g === "image" ? "Image" : g === "combine" ? "Combine" : g === "video" ? "Video" : "All ckpts"}
+              {g === "image"
+                ? "Image"
+                : g === "combine"
+                  ? "Combine"
+                  : g === "comic"
+                    ? "Comic"
+                    : g === "video"
+                      ? "Video"
+                      : "All ckpts"}
             </button>
           ))}
         </div>
@@ -2489,6 +2540,48 @@ export function Studio() {
               >
                 From this PC
               </Button>
+            </div>
+          </div>
+        ) : tab === "comic" ? (
+          <div className="flex h-[42dvh] flex-col items-center justify-center gap-3 px-4 md:h-[52dvh]">
+            <p className="text-2xl font-medium tracking-tight text-fg">Build a comic page</p>
+            <p className="max-w-md text-center text-sm text-muted">
+              Type the story below. One beat per line, or <span className="text-fg">P1:</span> <span className="text-fg">P2:</span>.
+              Pick a layout. Generate makes one printed page — same characters in every panel.
+            </p>
+            <div className="flex flex-wrap justify-center gap-1.5">
+              {COMIC_LAYOUTS.map((l) => (
+                <button
+                  key={l.id}
+                  type="button"
+                  title={l.hint}
+                  onClick={() => {
+                    setComicLayout(l.id);
+                    useForge.getState().setAspect(l.aspect);
+                  }}
+                  className={cn(
+                    "h-9 rounded-full px-3 text-xs",
+                    comicLayout === l.id ? "bg-accent text-accent-fg" : "bg-raised text-fg",
+                  )}
+                >
+                  {l.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex flex-wrap justify-center gap-1.5">
+              {COMIC_INK.map((ink) => (
+                <button
+                  key={ink.id}
+                  type="button"
+                  onClick={() => setComicInk(ink.id)}
+                  className={cn(
+                    "h-8 rounded-full px-2.5 text-[11px]",
+                    comicInk === ink.id ? "bg-bg text-fg" : "text-subtle hover:text-fg",
+                  )}
+                >
+                  {ink.label}
+                </button>
+              ))}
             </div>
           </div>
         ) : (
@@ -3238,7 +3331,25 @@ export function Studio() {
             >
               <ImagePlus className="size-4" />
             </Button>
-            {ASPECTS.slice(0, 4).map((a) => (
+            {tab === "comic"
+              ? COMIC_LAYOUTS.map((l) => (
+                  <button
+                    key={l.id}
+                    type="button"
+                    title={`${l.hint} · ${l.panels} panels`}
+                    onClick={() => {
+                      setComicLayout(l.id);
+                      useForge.getState().setAspect(l.aspect);
+                    }}
+                    className={cn(
+                      "h-9 rounded-full px-2.5 text-xs",
+                      comicLayout === l.id ? "bg-bg text-fg" : "text-subtle hover:text-fg",
+                    )}
+                  >
+                    {l.label}
+                  </button>
+                ))
+              : ASPECTS.slice(0, 4).map((a) => (
               <button
                 key={a}
                 type="button"
@@ -3251,7 +3362,7 @@ export function Studio() {
                 {a}
               </button>
             ))}
-            {!meta.video
+            {!meta.video && tab !== "comic"
               ? ([1, 2, 4, 8] as const).map((n) => (
                   <button
                     key={`b${n}`}
