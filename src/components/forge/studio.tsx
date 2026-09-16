@@ -225,6 +225,7 @@ export function Studio() {
   const wildcards = useForge((s) => s.wildcards);
   const jobs = useForge((s) => s.jobs);
   const activeJobId = useForge((s) => s.activeJobId);
+  const blankStage = useForge((s) => s.blankStage);
   const settings = useForge((s) => s.settings);
   const comfy = useForge((s) => s.comfy);
   const lanUrls = useForge((s) => s.lanUrls);
@@ -236,7 +237,7 @@ export function Studio() {
   const expandedPreview = useForge((s) => s.expandedPreview);
   const logs = useForge((s) => s.logs);
 
-  const active = jobs.find((j) => j.id === activeJobId) ?? jobs[0] ?? null;
+  const active = blankStage ? null : (jobs.find((j) => j.id === activeJobId) ?? jobs[0] ?? null);
   const meta = MODE_META[mode];
   const activeName =
     meta.video
@@ -2000,7 +2001,7 @@ export function Studio() {
     <div className="flex min-h-dvh flex-col bg-bg pb-8 text-fg">
       <header className="flex items-center gap-3 px-4 py-3 md:px-6">
         <p className="text-[15px] font-medium tracking-tight">Forge</p>
-        <span className="text-[11px] tabular-nums text-subtle">180</span>
+        <span className="text-[11px] tabular-nums text-subtle">181</span>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {meta.video ? (
             <select
@@ -2075,21 +2076,18 @@ export function Studio() {
         <Button
           variant="secondary"
           size="sm"
-          className="forge-pill hidden rounded-full sm:inline-flex"
+          className="forge-pill rounded-full"
           onClick={() => {
-            const st = useForge.getState();
-            st.setMedia([]);
-            st.setLiveScan(null);
-            st.setActiveJob(null);
-            st.setEditRemove("");
-            st.setEditAdd("");
-            st.setEditChange("");
-            st.setRefPrompt("");
-            st.setPrompt("");
+            useForge.getState().startNew();
             setShowSource(false);
             setZoom(null);
+            setIdeas([]);
+            setNsfwPick(new Set());
+            setMixJobIds([]);
+            skipIdeaRefresh.current = true;
+            const st = useForge.getState();
             st.setMode(tab === "combine" ? "ref2i" : tab === "video" ? "t2v" : "t2i");
-            toast.success("Cleared — new still");
+            logForge("info", "New", "Cleared stage, prompt, and photo");
           }}
         >
           New

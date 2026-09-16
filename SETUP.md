@@ -130,7 +130,7 @@ https://github.com/OblivionKnight4209/forge-comfyui/releases
 pkill -f "vite|npm run dev" 2>/dev/null || true
 rm -rf ~/forge && mkdir -p ~/forge
 cd ~/Downloads
-wget -O Forge-offline.zip https://github.com/OblivionKnight4209/forge-comfyui/releases/download/v180/Forge-offline.zip
+wget -O Forge-offline.zip https://github.com/OblivionKnight4209/forge-comfyui/releases/download/v181/Forge-offline.zip
 unzip -o Forge-offline.zip -d ~/forge
 cd ~/forge && chmod +x start-forge.sh && ./start-forge.sh
 ```

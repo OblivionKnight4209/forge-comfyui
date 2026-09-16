@@ -57,6 +57,7 @@ type ForgeState = {
   wildcards: WildcardFile[];
   jobs: Job[];
   activeJobId: string | null;
+  blankStage: boolean;
   settings: ComfySettings;
   comfy: ComfyStatus | null;
   lanUrls: string[];
@@ -99,6 +100,7 @@ type ForgeState = {
   removeJob: (id: string) => void;
   clearJobs: () => void;
   setActiveJob: (id: string | null) => void;
+  startNew: () => void;
   setSettings: (patch: Partial<ComfySettings>) => void;
   setComfy: (status: ComfyStatus | null) => void;
   applyComfy: (status: ComfyStatus) => void;
@@ -145,6 +147,7 @@ export const useForge = create<ForgeState>()(
       wildcards: DEFAULT_WILDCARDS,
       jobs: [],
       activeJobId: null,
+      blankStage: false,
       settings: DEFAULT_COMFY,
       comfy: null,
       lanUrls: [],
@@ -254,6 +257,7 @@ export const useForge = create<ForgeState>()(
       addJob: (job) =>
         set((s) => ({
           jobs: [job, ...s.jobs].slice(0, 40),
+          blankStage: false,
           activeJobId:
             MODE_META[s.mode].group === MODE_META[job.mode].group ? job.id : s.activeJobId,
         })),
@@ -272,10 +276,17 @@ export const useForge = create<ForgeState>()(
           return;
         }
         const cur = get().activeJobId;
+        const blank = get().blankStage;
         const running = jobs.some((j) => j.status === "running" || j.status === "queued");
         set({
           jobs,
-          activeJobId: running && cur && jobs.some((j) => j.id === cur) ? cur : (jobs[0]?.id ?? cur),
+          activeJobId: blank
+            ? null
+            : running && cur && jobs.some((j) => j.id === cur)
+              ? cur
+              : cur && jobs.some((j) => j.id === cur)
+                ? cur
+                : (jobs[0]?.id ?? cur),
         });
       },
       patchJob: (id, patch) =>
@@ -288,7 +299,20 @@ export const useForge = create<ForgeState>()(
         set({ jobs, activeJobId: active });
       },
       clearJobs: () => set({ jobs: [], activeJobId: null, liveScan: null }),
-      setActiveJob: (id) => set({ activeJobId: id }),
+      setActiveJob: (id) => set({ activeJobId: id, blankStage: id ? false : get().blankStage }),
+      startNew: () =>
+        set({
+          blankStage: true,
+          activeJobId: null,
+          media: [],
+          prompt: "",
+          refPrompt: "",
+          editRemove: "",
+          editAdd: "",
+          editChange: "",
+          liveScan: null,
+          expandedPreview: "",
+        }),
       setSettings: (patch) => set({ settings: { ...get().settings, ...patch } }),
       setComfy: (comfy) => set({ comfy }),
       applyComfy: (status) => {
@@ -484,6 +508,7 @@ export const useForge = create<ForgeState>()(
         ckptStyle: s.ckptStyle,
         artWrap: s.artWrap,
         qualityPick: s.qualityPick,
+        blankStage: s.blankStage,
       }),
     },
   ),
