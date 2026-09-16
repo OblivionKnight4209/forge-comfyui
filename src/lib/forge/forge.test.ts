@@ -32,6 +32,8 @@ import {
   settingsForCheckpoint,
   shouldReplaceNegative,
   sizeForFamily,
+  stillKey,
+  sameStill,
 } from "./types.ts";
 import {
   buildApiWorkflow,
@@ -1068,6 +1070,30 @@ describe("loras", () => {
     const r = pickLorasForPrompt("sexy anime girl", list, "sdxl", "DasiwaIllustriousAnime.safetensors");
     assert.equal(r.ok.length, 0);
     assert.equal(r.blocked.length, 2);
+  });
+});
+
+describe("still identity", () => {
+  it("treats forge-media and a named still as the same photo", () => {
+    assert.equal(stillKey("Forge_00015_.png", "data:image/png;base64,aaa"), "forge_00015_.png");
+    assert.equal(
+      stillKey("still.png", "/forge-media?folder=output&name=Forge_00015_.png"),
+      "forge_00015_.png",
+    );
+    assert.equal(
+      sameStill(
+        { name: "still.png", dataUrl: "/forge-media?folder=output&name=Forge_00015_.png" },
+        { name: "Forge_00015_.png", dataUrl: "data:image/png;base64,aaa" },
+      ),
+      true,
+    );
+    assert.equal(
+      sameStill(
+        { name: "Forge_00015_.png", dataUrl: "data:image/png;base64,aaa" },
+        { name: "Forge_00016_.png", dataUrl: "data:image/png;base64,bbb" },
+      ),
+      false,
+    );
   });
 });
 

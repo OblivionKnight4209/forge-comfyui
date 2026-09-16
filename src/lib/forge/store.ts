@@ -17,6 +17,7 @@ import {
   pickWanClip,
   pickWanVae,
   pairWanUnets,
+  sameStill,
   type Aspect,
   type ComfySettings,
   type ComfyStatus,
@@ -207,7 +208,11 @@ export const useForge = create<ForgeState>()(
       },
       setSoundOn: (soundOn) => set({ soundOn }),
       setShowBoxes: (showBoxes) => set({ showBoxes }),
-      addMedia: (items) => set({ media: [...get().media, ...items].slice(0, 5) }),
+      addMedia: (items) => {
+        const cur = get().media;
+        const extra = items.filter((n) => !cur.some((m) => sameStill(m, n)));
+        set({ media: [...cur, ...extra].slice(0, 5) });
+      },
       setMedia: (items) => set({ media: items.slice(0, 5), activeJobId: null }),
       removeMedia: (id) => set({ media: get().media.filter((m) => m.id !== id) }),
       clearMedia: () => set({ media: [] }),

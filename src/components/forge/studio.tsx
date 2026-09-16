@@ -67,6 +67,8 @@ import {
   canEditPhoto,
   pickVaeName,
   resolveCkpt,
+  sameStill,
+  stillKey,
   settingsForCheckpoint,
   settingsForFamily,
   negativeForCheckpoint,
@@ -690,11 +692,9 @@ export function Studio() {
     const st = useForge.getState();
     const combining = how === "add" || st.mode === "ref2i" || tab === "combine";
     if (combining && how === "add") {
-      st.addMedia([item]);
-      st.setMode("ref2i");
+      const n = pushCombinePhoto(item);
       setShowSource(true);
-      const n = useForge.getState().media.filter((m) => m.kind === "image").length;
-      toast.success(n < 2 ? `Combine: ${n} photo — drop another` : `Combine: ${n} photos`);
+      logForge("info", "Combine", n < 2 ? `${n} photo — tap a different one` : `${n} different photos`);
       return;
     }
     loadForEdit(dataUrl, still.name, still.folder);
@@ -713,12 +713,7 @@ export function Studio() {
 
   function alreadyInCombine(item: { dataUrl?: string; name?: string }) {
     const imgs = useForge.getState().media.filter((m) => m.kind === "image");
-    return imgs.some((m) => {
-      if (item.dataUrl && m.dataUrl === item.dataUrl) return true;
-      const n = item.name || "";
-      if (!n || n === "still.png" || n === "edit.png" || n === "continue.png") return false;
-      return m.name === n;
-    });
+    return imgs.some((m) => sameStill(m, item));
   }
 
   function pushCombinePhoto(item: MediaRef) {
@@ -1359,7 +1354,11 @@ export function Studio() {
     try {
       const images: { filename: string; dataUrl: string }[] = [];
       let idx = 0;
+      const seenPc = new Set<string>();
       for (const m of state.media.filter((x) => x.kind === "image").slice(0, 5)) {
+        const k = stillKey(m.name, m.dataUrl) || m.dataUrl.slice(0, 48);
+        if (k && seenPc.has(k)) continue;
+        if (k) seenPc.add(k);
         try {
           const dataUrl = await Promise.race([
             asDataUrl(m.dataUrl).catch(() => m.dataUrl),
@@ -1370,6 +1369,12 @@ export function Studio() {
           /* skip a stuck photo so Generate still fires */
         }
         idx += 1;
+      }
+      if ((tab === "combine" || state.mode === "ref2i") && images.length < 2) {
+        const msg = "Combine needs 2 different photos. Tap another in Results — not the same one twice.";
+        setQueueBanner(msg);
+        logForge("warn", "Combine", msg);
+        return;
       }
       setQueueBanner("");
       const r = await lanGenerate({
@@ -1457,30 +1462,45 @@ export function Studio() {
           ? "i2i"
           : useForge.getState().mode;
     const runMeta = MODE_META[runMode];
-    const inputs: MediaRef[] =
-      runMode === "ref2i"
-        ? state.media.filter((m) => m.kind === "image").slice(0, 5)
-        : (runMode === "i2i" || photoOn) && state.media[0]?.kind === "image"
-          ? [state.media[0]]
-          : state.media.length > 0
-            ? state.media
-          : runMeta.needsImage || runMeta.needsVideo
-            ? (() => {
-                const job =
-                  state.jobs.find((j) => j.id === state.activeJobId && j.resultDataUrl) ||
-                  state.jobs.find((j) => j.resultDataUrl);
-                if (!job?.resultDataUrl) return [];
-                return [
-                  {
-                    id: "from-last",
-                    kind: job.resultKind,
-                    name: job.resultName || (job.resultKind === "video" ? "last.mp4" : "last.png"),
-                    dataUrl: job.resultDataUrl,
-                    folder: job.resultFolder,
-                  },
-                ];
-              })()
-            : [];
+    const inputs: MediaRef[] = (() => {
+      const raw: MediaRef[] =
+        runMode === "ref2i"
+          ? state.media.filter((m) => m.kind === "image").slice(0, 5)
+          : (runMode === "i2i" || photoOn) && state.media[0]?.kind === "image"
+            ? [state.media[0]]
+            : state.media.length > 0
+              ? state.media
+              : runMeta.needsImage || runMeta.needsVideo
+                ? (() => {
+                    const job =
+                      state.jobs.find((j) => j.id === state.activeJobId && j.resultDataUrl) ||
+                      state.jobs.find((j) => j.resultDataUrl);
+                    if (!job?.resultDataUrl) return [];
+                    return [
+                      {
+                        id: "from-last",
+                        kind: job.resultKind,
+                        name: job.resultName || (job.resultKind === "video" ? "last.mp4" : "last.png"),
+                        dataUrl: job.resultDataUrl,
+                        folder: job.resultFolder,
+                      },
+                    ];
+                  })()
+                : [];
+      const seen = new Set<string>();
+      return raw.filter((m) => {
+        const k = stillKey(m.name, m.dataUrl) || m.dataUrl.slice(0, 48);
+        if (!k || seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
+    })();
+    if (runMode === "ref2i" && inputs.filter((m) => m.kind === "image").length < 2) {
+      const msg = "Combine needs 2 different photos. That 2×2 was the same still stacked. Tap another in Results.";
+      setQueueBanner(msg);
+      logForge("warn", "Combine", msg);
+      return;
+    }
     if (runMeta.video) {
       const wanList = useForge.getState().comfy?.unets ?? [];
       const picked =
@@ -1947,7 +1967,7 @@ export function Studio() {
     <div className="flex min-h-dvh flex-col bg-bg pb-8 text-fg">
       <header className="flex items-center gap-3 px-4 py-3 md:px-6">
         <p className="text-[15px] font-medium tracking-tight">Forge</p>
-        <span className="text-[11px] tabular-nums text-subtle">174</span>
+        <span className="text-[11px] tabular-nums text-subtle">175</span>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {meta.video ? (
             <select
@@ -2536,7 +2556,7 @@ export function Studio() {
               <Heart className="absolute bottom-1 right-1 size-3 fill-accent text-accent" />
             </button>
           ))}
-          {liveFiles.map((f) => {
+          {liveFiles.filter((f) => !jobs.some((j) => stillKey(j.resultName) === stillKey(f.name))).map((f) => {
             const src = `/forge-media?folder=${f.folder}&name=${encodeURIComponent(f.name)}`;
             const vid = isVideoName(f.name);
             return (

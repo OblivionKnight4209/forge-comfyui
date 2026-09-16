@@ -133,6 +133,39 @@ export type MediaRef = {
   folder?: "input" | "output";
 };
 
+const GENERIC_STILL = /^(still|edit|continue|liked|last|photo)(\.png|\.jpg|\.jpeg|\.webp)?$/i;
+
+/** Same photo even if one path is /forge-media?name= and the other is a data URL. */
+export function stillKey(name?: string, src?: string): string {
+  const fromName = (name || "").replace(/\\/g, "/").split("/").pop() || "";
+  let fromSrc = "";
+  const s = src || "";
+  const q = s.match(/[?&](?:name|filename)=([^&]+)/i);
+  if (q) {
+    try {
+      fromSrc = decodeURIComponent(q[1]);
+    } catch {
+      fromSrc = q[1];
+    }
+  }
+  for (const raw of [fromName, fromSrc]) {
+    const base = (raw || "").replace(/\\/g, "/").split("/").pop()?.trim() || "";
+    if (!base || GENERIC_STILL.test(base)) continue;
+    return base.toLowerCase();
+  }
+  return "";
+}
+
+export function sameStill(
+  a: { name?: string; dataUrl?: string },
+  b: { name?: string; dataUrl?: string },
+): boolean {
+  if (a.dataUrl && b.dataUrl && a.dataUrl === b.dataUrl) return true;
+  const ka = stillKey(a.name, a.dataUrl);
+  const kb = stillKey(b.name, b.dataUrl);
+  return Boolean(ka && kb && ka === kb);
+}
+
 export type DetectedBox = {
   id: string;
   label: string;
