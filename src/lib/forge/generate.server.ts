@@ -18,7 +18,7 @@ import {
 } from "./types";
 import { applyArtWrap, applyQualityOffers, qualityWantsHires } from "./looks";
 import { buildApiWorkflow, pickLorasForPrompt, rewireLoadImages, triggerPrefix, i2iDenoise } from "./workflows";
-import { grokExpand, grokMotion } from "./wildcards";
+import { flattenPrompt } from "./wildcards";
 import { probeComfy, queuePrompt, uploadToComfy } from "./comfy.server";
 
 export type GenerateIntent = {
@@ -92,20 +92,11 @@ export async function runGenerateIntent(intent: GenerateIntent) {
     ? promptIn
     : applyQualityOffers(applyArtWrap(promptIn, intent.artWrap || "none"), intent.quality || []);
   if (!i2i && qualityWantsHires(intent.quality || [])) settings.hires = true;
-  const sent = video
-    ? grokMotion(wrapped, intent.mode === "i2v" || intent.mode === "ref2v" ? "still-lock" : "invent")
-    : i2i
-      ? /same art style/i.test(promptIn)
-        ? promptIn
-        : `${promptIn}, same art style, same rendering, same lighting, same colors, same camera, do not restyle, only the requested edit`
-      : grokExpand({
-          typed: wrapped,
-          files: [],
-          seed: intent.seed || 1,
-          checkpoint: settings.checkpoint,
-          roll: intent.roll || "normal",
-          nsfwMode: intent.nsfwMode,
-        });
+  const sent = i2i
+    ? /same art style/i.test(promptIn)
+      ? promptIn
+      : `${promptIn}, same art style, same rendering, same lighting, same colors, same camera, do not restyle, only the requested edit`
+    : flattenPrompt(wrapped, intent.seed || 1);
   const loraCkpt = video ? settings.wanUnet || settings.checkpoint : settings.checkpoint;
   const stacked = pickLorasForPrompt(
     i2i ? "" : promptIn,

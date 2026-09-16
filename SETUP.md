@@ -110,9 +110,9 @@ cp /tmp/pose-gal/Krea2-Pose-Library-for-EasyUse/samples/*.webp "$EASY/samples/"
 
 ## How to use Forge
 
-1. Comfy running, Forge v192+, header **LLM** green, **ckpt** count not “No ComfyUI”.
+1. Comfy running, Forge v173+, header **LLM** green, **ckpt** count not “No ComfyUI”.
 2. Pick a checkpoint that matches the LoRA (Illustrious LoRA → Dasiwa / novaAnime XL, not CuteKittenMix).
-3. Type a scene. **Brain** fills the box. **Write** asks for flavor ideas. Click one.
+3. Type a scene. **Write prompt** (or **Sex**) asks Skynet for 3 graphic ideas. Click one.
 4. **Generate** sends your box as-is to Comfy (does not rewrite).
 5. Drop a photo → **Edit photo** (img2img). Strength slider = how hard it overwrites.
 6. `__hair__` chips insert a wildcard. **Roll** picks a line from `wildcards/`.
@@ -130,7 +130,7 @@ https://github.com/OblivionKnight4209/forge-comfyui/releases
 pkill -f "vite|npm run dev" 2>/dev/null || true
 rm -rf ~/forge && mkdir -p ~/forge
 cd ~/Downloads
-wget -O Forge-offline.zip https://github.com/OblivionKnight4209/forge-comfyui/releases/download/v192/Forge-offline.zip
+wget -O Forge-offline.zip https://github.com/OblivionKnight4209/forge-comfyui/releases/download/v194/Forge-offline.zip
 unzip -o Forge-offline.zip -d ~/forge
 cd ~/forge && chmod +x start-forge.sh && ./start-forge.sh
 ```

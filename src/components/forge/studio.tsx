@@ -13,6 +13,7 @@ import {
   Heart,
   Images,
   X,
+  Play,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type DragEvent as ForgeDragEvent } from "react";
 import { SpeechMic, appendSpoken } from "@/components/forge/speech-mic";
@@ -81,7 +82,7 @@ import {
   type Mode,
   type ModelFamily,
 } from "@/lib/forge/types";
-import { PROMPT_FLAVORS, expandPrompt, grokExpand, grokMotion, writeIdeas, writePrompt, isAdult, flattenPrompt, userLead, recoverScene, composeNewScene, isPurpleProse, sceneCore, tokenOverlap, nsfwWanted, isShortSubject, type PromptFlavor } from "@/lib/forge/wildcards";
+import { PROMPT_FLAVORS, expandPrompt, grokExpand, writeIdeas, writePrompt, isAdult, flattenPrompt, userLead, recoverScene, composeNewScene, isPurpleProse, sceneCore, tokenOverlap, nsfwWanted, isShortSubject, type PromptFlavor } from "@/lib/forge/wildcards";
 import { composeI2iPrompt, expandEditFields } from "@/lib/forge/edit-prompt";
 import { isVideoName, mediaMime, withVideoDataUrl } from "@/lib/forge/media-mime";
 import { writeExtreme, writeDarkSet, writeTabooSet, writeHorrorSet, isWashed, NSFW_TYPES, nsfwGroup, writeMenus, WHO_BITS, WHERE_BITS, MORE_BITS, COMIC_BITS, EVIL_BITS, FACE_BITS, BODY_BITS, CLOTHES_BITS, PLACE_BITS, CAM_BITS, LIGHT_BITS } from "@/lib/forge/extreme";
@@ -832,6 +833,11 @@ export function Studio() {
     setTab("video");
     setZoom(null);
     logForge("info", "Video", `${n} is frame 1. Type the motion, then Generate.`);
+  }
+
+  function playStill(src: string, name: string, folder?: "input" | "output") {
+    loadForVideo(src, name, folder);
+    void generate();
   }
 
   function clearEdit(kind: "photo" | "words" | "all") {
@@ -1835,43 +1841,9 @@ export function Studio() {
       );
     }
     let denoiseNow = state.denoise;
-    let sent = parsed.expanded;
-    if (runMode === "t2v" || runMode === "i2v" || runMode === "ref2v" || runMode === "v2v") {
-      sent = grokMotion(
-        userPrompt,
-        runMode === "i2v" || runMode === "ref2v" || runMode === "v2v" ? "still-lock" : "invent",
-      );
-    } else if (runMode === "t2i") {
-      sent = flattenPrompt(
-        grokExpand({
-          typed: parsed.expanded,
-          files: state.wildcards,
-          seed: nextSeed,
-          family: fam === "sd15" || fam === "flux" || fam === "sdxl" ? fam : "sdxl",
-          checkpoint: settingsNow.checkpoint,
-          roll: state.promptRoll,
-          nsfwMode: state.nsfwMode,
-        }),
-        nextSeed,
-      );
-    } else if (runMode === "i2i") {
-      sent = parsed.expanded;
-      if (!/same art style/i.test(sent)) {
-        sent = `${sent}, same art style, same rendering, same lighting, same colors, do not restyle`;
-      }
-    } else if (runMode === "ref2i") {
-      sent = flattenPrompt(
-        grokExpand({
-          typed: parsed.expanded,
-          files: state.wildcards,
-          seed: nextSeed,
-          family: fam === "sd15" || fam === "flux" || fam === "sdxl" ? fam : "sdxl",
-          checkpoint: settingsNow.checkpoint,
-          roll: state.promptRoll,
-          nsfwMode: state.nsfwMode,
-        }),
-        nextSeed,
-      );
+    let sent = flattenPrompt(parsed.expanded, nextSeed);
+    if (runMode === "i2i" && !/same art style/i.test(sent)) {
+      sent = `${sent}, same art style, same rendering, same lighting, same colors, do not restyle`;
     }
     let finalPrompt = triggerPrefix(stacked, sent);
     if (runMode !== "i2i") {
@@ -1883,10 +1855,6 @@ export function Studio() {
     }
     if (runMode === "ref2i") {
       finalPrompt = `unified single scene combining the reference photos, not a split collage, not a grid, ${finalPrompt}`;
-    }
-    if (!opts?.quiet && (runMode === "t2i" || runMode === "t2v")) {
-      skipIdeaRefresh.current = true;
-      useForge.getState().setPrompt(sent);
     }
     if (runMode === "i2i" || runMode === "ref2i") {
       const change = /\b(remove|undress|take off|strip|add |change |replace |delete |put on|clothes|shirt|dress|nude|naked)\b/i.test(
@@ -2110,7 +2078,7 @@ export function Studio() {
     <div className="flex min-h-dvh flex-col bg-bg pb-8 text-fg">
       <header className="flex items-center gap-3 px-4 py-3 md:px-6">
         <p className="text-[15px] font-medium tracking-tight">Forge</p>
-        <span className="text-[11px] tabular-nums text-subtle">191</span>
+        <span className="text-[11px] tabular-nums text-subtle">194</span>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {meta.video ? (
             <select
@@ -2451,9 +2419,18 @@ export function Studio() {
                 />
                 <ScanBoxes boxes={scan?.boxes ?? []} show={showBoxes} />
               </div>
+              <button
+                type="button"
+                className="absolute bottom-4 right-4 z-20 flex size-14 items-center justify-center rounded-full bg-accent text-accent-fg shadow-lg"
+                title="Play — this still becomes a clip"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  playStill(stageSrc, active?.resultName || "still.png", active?.resultFolder || "output");
+                }}
+              >
+                <Play className="size-6 fill-current" />
+              </button>
             </div>
-          )
-        ) : tab === "combine" ? (
           <div className="flex h-[42dvh] flex-col items-center justify-center gap-3 px-4 md:h-[52dvh]">
             <p className="text-2xl font-medium tracking-tight text-fg">Combine 2–5 photos</p>
             <p className="max-w-md text-center text-sm text-muted">
@@ -3272,6 +3249,22 @@ export function Studio() {
                 {a}
               </button>
             ))}
+            {!meta.video
+              ? ([1, 2, 4, 8] as const).map((n) => (
+                  <button
+                    key={`b${n}`}
+                    type="button"
+                    title={`${n} stills per Generate`}
+                    onClick={() => useForge.getState().setSettings({ batchSize: n })}
+                    className={cn(
+                      "h-9 rounded-full px-2.5 text-xs",
+                      (settings.batchSize || 1) === n ? "bg-bg text-fg" : "text-subtle hover:text-fg",
+                    )}
+                  >
+                    {n}×
+                  </button>
+                ))
+              : null}
             {meta.video
               ? ([6, 10, 15] as const).map((d) => (
                   <button
@@ -3363,20 +3356,6 @@ export function Studio() {
                 {settings.hires ? "Hires on" : "Hires"}
               </Button>
             ) : null}
-            {MODE_META[mode].video ? null : (
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              title="How many stills per Generate. 1–8. Video stays 1."
-              onClick={() => {
-                const cur = settings.batchSize || 1;
-                useForge.getState().setSettings({ batchSize: cur >= 8 ? 1 : cur + 1 });
-              }}
-            >
-              Batch {settings.batchSize || 1}
-            </Button>
-            )}
             {showMore ? (
               <>
             <Button
@@ -3450,6 +3429,7 @@ export function Studio() {
               className="ml-auto min-h-12 min-w-32 touch-manipulation rounded-full"
               size="lg"
               style={{ WebkitTapHighlightColor: "transparent", touchAction: "manipulation" }}
+              title="Sends the box as-is. Tap Brain or Write to fill it first."
               onTouchEnd={(e) => {
                 e.stopPropagation();
                 fireGenerate();
@@ -4013,11 +3993,12 @@ export function Studio() {
                 size="sm"
                 variant="secondary"
                 onClick={() => {
-                  loadForVideo(zoom.src, zoom.name || "still.png", "output");
+                  playStill(zoom.src, zoom.name || "still.png", "output");
                   setZoom(null);
                 }}
               >
-                Animate
+                <Play className="size-3 fill-current" />
+                Play
               </Button>
             ) : null}
             <Button size="sm" variant="secondary" onClick={() => void deleteThisStill(zoom.src)}>
