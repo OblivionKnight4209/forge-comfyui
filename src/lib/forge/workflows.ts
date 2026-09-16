@@ -1,5 +1,5 @@
 import type { Aspect, ComfySettings, Job, LoraEntry, Mode, ModelFamily } from "./types";
-import { ASPECT_SIZE, guessArch, guessLoraLane, isHighNoiseUnet, isLightningUnet, isLowNoiseUnet, isNotALora, isWan14b, isWan5b, loraFitsCheckpoint, loraNameKeys, promptNameWords, sizeForFamily, wordHitsLoraName } from "./types";
+import { ASPECT_SIZE, guessArch, guessLoraLane, i2iCanvasSize, isHighNoiseUnet, isLightningUnet, isLowNoiseUnet, isNotALora, isWan14b, isWan5b, loraFitsCheckpoint, loraNameKeys, promptNameWords, sizeForFamily, wordHitsLoraName } from "./types";
 
 export type ApiNode = {
   class_type: string;
@@ -24,6 +24,8 @@ type BuildArgs = {
   taggerModel?: string;
   vaeName?: string;
   lean?: boolean;
+  inputW?: number;
+  inputH?: number;
 };
 
 function node(
@@ -40,6 +42,7 @@ function encodeInputStill(
   w: number,
   h: number,
   vae: [string, number],
+  crop: "disabled" | "center" = "center",
 ) {
   prompt["20"] = node("LoadImage", { image: filename }, "Input still");
   prompt["22"] = node(
@@ -49,7 +52,7 @@ function encodeInputStill(
       width: w,
       height: h,
       upscale_method: "lanczos",
-      crop: "center",
+      crop,
     },
     "Fit size",
   );
@@ -196,7 +199,10 @@ function encodeLong(
 }
 
 function fluxStill(args: BuildArgs): ApiPrompt {
-  const { w, h } = ASPECT_SIZE[args.aspect];
+  const { w, h } =
+    args.mode === "i2i" && args.inputW && args.inputH
+      ? i2iCanvasSize(args.inputW, args.inputH, "flux")
+      : ASPECT_SIZE[args.aspect];
   const s = args.settings;
   const fromCkpt = s.stillLoader !== "flux-unet";
   const prompt: ApiPrompt = {
@@ -240,7 +246,7 @@ function fluxStill(args: BuildArgs): ApiPrompt {
   if (args.mode === "ref2i" && args.imageCount >= 2) {
     encodeRefCollage(prompt, args.imageCount, w, h, ["3", 0]);
   } else if (i2i) {
-    encodeInputStill(prompt, "forge_input_0.png", w, h, ["3", 0]);
+    encodeInputStill(prompt, "forge_input_0.png", w, h, ["3", 0], args.inputW ? "disabled" : "center");
   } else {
     prompt["21"] = node(
       "EmptySD3LatentImage",
@@ -274,7 +280,10 @@ function sdxlStill(args: BuildArgs): ApiPrompt {
   const s = args.settings;
   const ckpt = s.checkpoint || s.sdxlCheckpoint;
   const arch = s.stillFamily === "flux" || s.stillFamily === "sd15" ? s.stillFamily : "sdxl";
-  const { w, h } = sizeForFamily(arch, args.aspect);
+  const { w, h } =
+    args.mode === "i2i" && args.inputW && args.inputH
+      ? i2iCanvasSize(args.inputW, args.inputH, arch === "sd15" ? "sd15" : arch === "flux" ? "flux" : "sdxl")
+      : sizeForFamily(arch, args.aspect);
   const prompt: ApiPrompt = {
     "1": node("CheckpointLoaderSimple", { ckpt_name: ckpt }, "Checkpoint"),
   };
@@ -323,7 +332,7 @@ function sdxlStill(args: BuildArgs): ApiPrompt {
       prompt["21r"] = node("RepeatLatentBatch", { samples: ["21", 0], amount: n }, "Batch");
     }
   } else if (i2i) {
-    encodeInputStill(prompt, "forge_input_0.png", w, h, vae);
+    encodeInputStill(prompt, "forge_input_0.png", w, h, vae, args.inputW ? "disabled" : "center");
     const n = Math.min(8, Math.max(1, s.batchSize || 1));
     if (n > 1) {
       prompt["21r"] = node("RepeatLatentBatch", { samples: ["21", 0], amount: n }, "Batch");
@@ -683,10 +692,10 @@ function wanVideo(args: BuildArgs): ApiPrompt {
 }
 
 export function i2iDenoise(denoise: number, structural: boolean) {
-  const n = Number.isFinite(denoise) ? denoise : 0.42;
-  if (n >= 0.95) return structural ? 0.55 : 0.42;
-  if (structural) return Math.min(0.58, Math.max(0.45, n));
-  return Math.min(0.48, Math.max(0.32, n));
+  const n = Number.isFinite(denoise) ? denoise : 0.38;
+  if (n >= 0.95) return structural ? 0.52 : 0.38;
+  if (structural) return Math.min(0.52, Math.max(0.40, n));
+  return Math.min(0.38, Math.max(0.28, n));
 }
 
 export function validateApiGraph(graph: ApiPrompt): string[] {

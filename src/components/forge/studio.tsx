@@ -83,6 +83,8 @@ import {
   negativeForCheckpoint,
   negativeForPrompt,
   shouldReplaceNegative,
+  aspectFromSize,
+  pickEditCheckpoint,
   type Job,
   type LoraEntry,
   type MediaRef,
@@ -114,6 +116,19 @@ function pct(n: number) {
   return `${Math.round(n * 100)}%`;
 }
 
+function measureDataUrl(url: string): Promise<{ w: number; h: number }> {
+  return new Promise((res) => {
+    if (typeof Image === "undefined" || !url) {
+      res({ w: 0, h: 0 });
+      return;
+    }
+    const img = new Image();
+    img.onload = () => res({ w: img.naturalWidth, h: img.naturalHeight });
+    img.onerror = () => res({ w: 0, h: 0 });
+    img.src = url;
+  });
+}
+
 async function filesToMedia(files: FileList | File[]): Promise<MediaRef[]> {
   const list = Array.from(files);
   const out: MediaRef[] = [];
@@ -131,11 +146,14 @@ async function filesToMedia(files: FileList | File[]): Promise<MediaRef[]> {
       r.readAsDataURL(file);
     });
     if (looksVideo) dataUrl = withVideoDataUrl(dataUrl, file.name, file.type);
+    const size = looksVideo ? { w: 0, h: 0 } : await measureDataUrl(dataUrl);
     out.push({
       id: uid(),
       kind: looksVideo ? "video" : "image",
       name: file.name || (looksVideo ? "drop.mp4" : "drop.png"),
       dataUrl,
+      width: size.w || undefined,
+      height: size.h || undefined,
     });
   }
   return out;
@@ -744,8 +762,10 @@ export function Studio() {
       }
       useForge.getState().setMode("i2i");
       useForge.getState().setLiveScan(null);
-      const d = useForge.getState().denoise;
-      if (d < 0.55 || d === 1) useForge.getState().setDenoise(0.78);
+      useForge.getState().setDenoise(0.38);
+      if (imgs[0]!.width && imgs[0]!.height) {
+        useForge.getState().setAspect(aspectFromSize(imgs[0]!.width, imgs[0]!.height));
+      }
       setShowSource(true);
       toast.success("This picture is the one being edited.");
       void adoptDroppedStill(imgs[0]!.dataUrl);
@@ -921,12 +941,20 @@ export function Studio() {
     ]);
     useForge.getState().setMode("i2i");
     useForge.getState().setLiveScan(null);
-    const d = useForge.getState().denoise;
-    if (d < 0.55 || d === 1) useForge.getState().setDenoise(0.78);
+    useForge.getState().setDenoise(0.38);
     setShowSource(true);
     setTab("image");
     setZoom(null);
-    toast.success("Edit photo — Take out / Put in / Change, then Generate");
+    toast.success("Edit photo — type the change, then Generate. Strength stays low so the photo holds.");
+    void (async () => {
+      const s = await measureDataUrl(src);
+      if (s.w && s.h) {
+        useForge.getState().setAspect(aspectFromSize(s.w, s.h));
+        const cur = useForge.getState().media[0];
+        if (cur) useForge.getState().setMedia([{ ...cur, width: s.w, height: s.h }]);
+      }
+      await adoptDroppedStill(src);
+    })();
   }
 
   function loadForVideo(src: string, name: string, folder?: "input" | "output") {
@@ -1136,7 +1164,20 @@ export function Studio() {
       /* ignore */
     }
     const scan = await runWd14Scan(dataUrl);
-    if (scan) useForge.getState().setLiveScan(scan);
+    if (scan) {
+      useForge.getState().setLiveScan(scan);
+      const tags = scan.tags.map((t) => t.tag);
+      const cur = useForge.getState().settings.checkpoint;
+      const next = pickEditCheckpoint(tags, cur, useForge.getState().comfy?.checkpoints ?? []);
+      if (next && next !== cur) {
+        useForge.getState().setSettings(settingsForCheckpoint(next));
+        logForge("info", "Edit", `This photo looks like ${tags.slice(0, 4).join(", ") || "a still"} — mix set to ${next.split(/[/\\]/).pop()}`);
+      }
+      const pic = useForge.getState().media.find((m) => m.kind === "image");
+      if (pic?.width && pic.height) {
+        useForge.getState().setAspect(aspectFromSize(pic.width, pic.height));
+      }
+    }
   }
 
   function remakeThisStill() {
@@ -1324,6 +1365,26 @@ export function Studio() {
 
   async function runBrain(flavor?: string) {
     const state = useForge.getState();
+    if (state.mode === "i2i") {
+      const scan =
+        state.liveScan?.summary ||
+        state.liveScan?.tags.slice(0, 12).map((t) => t.tag).join(", ") ||
+        "";
+      const filled = composeI2iPrompt(
+        state.prompt.trim(),
+        { remove: state.editRemove, add: state.editAdd, change: state.editChange },
+        scan,
+      );
+      if (!filled) {
+        toast.error("Type the edit (remove the jacket, add a hat) then Brain.");
+        return false;
+      }
+      skipIdeaRefresh.current = true;
+      state.setPrompt(filled);
+      setIdeas([filled]);
+      logForge("info", "Brain", "Edit mode — kept the photo, only filled the change");
+      return true;
+    }
     const line =
       state.mode === "ref2i"
         ? state.refPrompt.trim() || state.prompt.trim()
@@ -1404,6 +1465,21 @@ export function Studio() {
         : state.mode === "ref2i"
           ? state.refPrompt.trim() || state.prompt.trim()
           : state.prompt.trim();
+    if (state.mode === "i2i") {
+      const scan =
+        state.liveScan?.summary ||
+        state.liveScan?.tags.slice(0, 12).map((t) => t.tag).join(", ") ||
+        "";
+      const filled = composeI2iPrompt(raw, {
+        remove: state.editRemove,
+        add: state.editAdd,
+        change: state.editChange,
+      }, scan);
+      skipIdeaRefresh.current = true;
+      state.setPrompt(filled);
+      logForge("info", "Write", "Edit mode — did not rewrite the photo");
+      return;
+    }
     const sceneUse = isPurpleProse(raw) ? recoverScene(raw) || raw : raw;
     const seed = Date.now() % 1_000_000_000;
     const picked = writeCatalog().filter((t) => nsfwPick.has(t.id));
@@ -1654,7 +1730,7 @@ export function Studio() {
         ? composeI2iPrompt(
             state.prompt || typed,
             { remove: state.editRemove, add: state.editAdd, change: state.editChange },
-            (state.liveScan?.summary || state.liveScan?.tags.slice(0, 8).join(", ")) ?? "",
+            (state.liveScan?.summary || state.liveScan?.tags.slice(0, 8).map((t) => t.tag).join(", ")) ?? "",
           )
         : runMode === "ref2i"
           ? state.refPrompt.trim() || state.prompt.trim() || typed
@@ -1702,7 +1778,15 @@ export function Studio() {
         seed: nextSeed,
         mode: runMode,
         aspect: state.aspect,
-        denoise: state.denoise,
+        denoise:
+          runMode === "i2i"
+            ? i2iDenoise(
+                state.denoise,
+                /\b(remove|undress|take off|strip|add |change |replace |delete |put on|clothes|shirt|dress|nude|naked)\b/i.test(
+                  userPrompt,
+                ),
+              )
+            : state.denoise,
         artWrap: state.artWrap,
         quality: state.qualityPick,
         roll: state.promptRoll,
@@ -1713,6 +1797,8 @@ export function Studio() {
           : state.settings,
         images,
         loras: state.loras.filter((l) => l.enabled && !isNotALora(l.filename)).slice(0, 8),
+        inputW: state.media.find((m) => m.kind === "image")?.width,
+        inputH: state.media.find((m) => m.kind === "image")?.height,
       });
       if (!r.ok) {
         setQueueBanner(r.message);
@@ -1961,7 +2047,7 @@ export function Studio() {
             remove: state.editRemove,
             add: state.editAdd,
             change: state.editChange,
-          }, (state.liveScan?.summary || state.liveScan?.tags.slice(0, 8).join(", ")) ?? "")
+          }, (state.liveScan?.summary || state.liveScan?.tags.slice(0, 8).map((t) => t.tag).join(", ")) ?? "")
         : runMode === "ref2i"
           ? state.refPrompt.trim() || state.prompt.trim()
           : state.prompt.trim();
@@ -1983,10 +2069,18 @@ export function Studio() {
         useForge.getState().negLocked,
       );
       if (useForge.getState().negLocked) return base;
-      const extra = extraNegFromTaste(taste);
-      if (!extra) return base;
-      if (base.toLowerCase().includes("extra fingers")) return base;
-      return base ? `${base}, ${extra}` : extra;
+    const extra = extraNegFromTaste(taste);
+    let negOut = extra && !useForge.getState().negLocked && !base.toLowerCase().includes("extra fingers")
+      ? base ? `${base}, ${extra}` : extra
+      : base;
+    if ((runMode === "i2i" || runMode === "ref2i") && !useForge.getState().negLocked) {
+      if (!/different face/i.test(negOut)) {
+        negOut = negOut
+          ? `${negOut}, different person, different face, restyle, different art style, extra people, extra limbs`
+          : "different person, different face, restyle, different art style, extra people, extra limbs";
+      }
+    }
+    return negOut;
     })();
     if (!runMeta.video && state.settings.stillLoader === "checkpoint") {
       const resolved = resolveCkpt(state.settings.checkpoint, useForge.getState().comfy?.checkpoints ?? []);
@@ -2039,11 +2133,16 @@ export function Studio() {
     const fam = guessArch(loraCkpt);
     const liveLoras = useForge.getState().loras;
     const picked = pickLorasForPrompt(
-      runMode === "i2i" ? "" : userPrompt,
-      runMode === "i2i" ? liveLoras.filter((l) => l.enabled) : liveLoras,
+      runMode === "i2i"
+        ? `${userPrompt} ${(state.liveScan?.tags || []).map((t) => t.tag).join(" ")}`
+        : userPrompt,
+      liveLoras,
       fam,
       loraCkpt,
     );
+    if (runMode === "i2i") {
+      picked.ok = picked.named.slice(0, 2);
+    }
     picked.ok = picked.ok.filter((l) => loraScore(taste, l.filename) >= -2);
     const match = { ok: picked.ok, blocked: picked.blocked, family: fam };
     for (const l of picked.dropped) {
@@ -2126,6 +2225,17 @@ export function Studio() {
       );
       denoiseNow = i2iDenoise(denoiseNow, change);
     }
+    let inW = inputs.find((m) => m.kind === "image")?.width;
+    let inH = inputs.find((m) => m.kind === "image")?.height;
+    if (runMode === "i2i" && (!inW || !inH)) {
+      const src = inputs.find((m) => m.kind === "image")?.dataUrl;
+      if (src) {
+        const s = await measureDataUrl(src);
+        inW = s.w || inW;
+        inH = s.h || inH;
+        if (inW && inH) useForge.getState().setAspect(aspectFromSize(inW, inH));
+      }
+    }
     const api = buildApiWorkflow({
       mode: runMode,
       prompt: finalPrompt,
@@ -2146,6 +2256,8 @@ export function Studio() {
       taggerModel: "",
       vaeName: pickVaeName(fam === "flux" || fam === "sd15" || fam === "sdxl" ? fam : "sdxl", settingsNow, useForge.getState().comfy?.vaes ?? []),
       lean: Boolean(opts?.leanVideo),
+      inputW: inW,
+      inputH: inH,
     });
     const ui = apiToUiWorkflow(api, `Forge ${MODE_META[runMode].label}`);
     const job: Job = {
@@ -2365,7 +2477,7 @@ export function Studio() {
     <div className="flex min-h-dvh flex-col bg-bg pb-8 text-fg">
       <header className="flex flex-wrap items-center gap-2 px-3 py-3 md:gap-3 md:px-6">
         <p className="text-[15px] font-medium tracking-tight">Forge</p>
-        <span className="text-[11px] tabular-nums text-subtle">210</span>
+        <span className="text-[11px] tabular-nums text-subtle">211</span>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {meta.video ? (
             <select

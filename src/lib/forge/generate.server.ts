@@ -37,6 +37,8 @@ export type GenerateIntent = {
   settings?: Partial<ComfySettings>;
   images?: { filename: string; dataUrl: string }[];
   loras?: LoraEntry[];
+  inputW?: number;
+  inputH?: number;
 };
 
 export async function runGenerateIntent(intent: GenerateIntent) {
@@ -98,19 +100,24 @@ export async function runGenerateIntent(intent: GenerateIntent) {
       : `${promptIn}, same art style, same rendering, same lighting, same colors, same camera, do not restyle, only the requested edit`
     : flattenPrompt(wrapped, intent.seed || 1);
   const loraCkpt = video ? settings.wanUnet || settings.checkpoint : settings.checkpoint;
-  const stacked = pickLorasForPrompt(
-    i2i ? "" : promptIn,
+  const picked = pickLorasForPrompt(
+    promptIn,
     intent.loras ?? [],
     guessArch(loraCkpt),
     loraCkpt,
-  ).ok;
+  );
+  const stacked = i2i ? picked.named.slice(0, 2) : picked.ok;
   const finalPrompt = triggerPrefix(stacked, sent);
-  const neg = generateNegative(intent.negative || "", settings.checkpoint, finalPrompt, intent.negLocked);
+  const negBase = generateNegative(intent.negative || "", settings.checkpoint, finalPrompt, intent.negLocked);
+  const neg =
+    i2i && !intent.negLocked
+      ? `${negBase}, different person, different face, restyle, different art style, extra people, extra limbs`.replace(/^, /, "")
+      : negBase;
 
   const images = intent.images ?? [];
   const denoise = i2i
     ? i2iDenoise(
-        intent.denoise ?? 0.42,
+        intent.denoise ?? 0.38,
         /\b(remove|undress|take off|strip|add |change |replace |delete |put on|clothes|shirt|dress|nude|naked)\b/i.test(
           promptIn,
         ),
@@ -127,6 +134,8 @@ export async function runGenerateIntent(intent: GenerateIntent) {
     settings,
     imageCount: images.length,
     hasVideo: false,
+    inputW: intent.inputW,
+    inputH: intent.inputH,
   });
 
   for (const img of images) {

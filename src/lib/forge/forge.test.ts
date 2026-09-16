@@ -38,6 +38,9 @@ import {
   sizeForFamily,
   stillKey,
   sameStill,
+  aspectFromSize,
+  i2iCanvasSize,
+  pickEditCheckpoint,
 } from "./types.ts";
 import {
   buildApiWorkflow,
@@ -1662,15 +1665,47 @@ describe("edit prompt is separate", () => {
     assert.match(x.add, /visible/i);
   });
   it("typed rephrase wins over take-out fields", () => {
-    const t = composeI2iPrompt("remove her jacket, keep the face", { remove: "shirt", add: "red jacket" });
+    const t = composeI2iPrompt("remove her jacket, keep the face", { remove: "shirt", add: "red jacket" }, "blonde woman, red dress");
     assert.match(t, /^remove her jacket, keep the face/);
     assert.match(t, /add red jacket/);
+    assert.match(t, /blonde woman/);
     assert.match(t, /same art style/i);
-    assert.doesNotMatch(t, /the photo already shows/);
   });
   it("empty box still uses take-out lines", () => {
     const t = composeI2iPrompt("", { remove: "the shirt" });
     assert.match(t, /remove the shirt/i);
+  });
+});
+
+describe("edit a photo that Forge did not make", () => {
+  it("keeps the dropped photo’s shape", () => {
+    assert.equal(aspectFromSize(1920, 1080), "16:9");
+    assert.equal(aspectFromSize(1080, 1920), "9:16");
+    const s = i2iCanvasSize(1920, 1080, "sdxl");
+    assert.equal(s.w, 1024);
+    assert.equal(s.h, 576);
+    assert.ok(s.w / s.h > 1.5);
+  });
+  it("picks a real mix for a photo, anime mix for a drawing", () => {
+    const all = [
+      "DasiwaIllustriousAnime_epitaphecstasy.safetensors",
+      "epicrealism_naturalSinRC1VAE.safetensors",
+    ];
+    assert.match(pickEditCheckpoint(["photorealistic", "selfie"], "DasiwaIllustriousAnime_epitaphecstasy.safetensors", all), /epicrealism/i);
+    assert.match(pickEditCheckpoint(["anime", "1girl"], "epicrealism_naturalSinRC1VAE.safetensors", all), /illustrious/i);
+  });
+  it("i2i does not center-crop when it knows the photo size", () => {
+    const g = graph({
+      mode: "i2i",
+      imageCount: 1,
+      denoise: 0.38,
+      inputW: 1920,
+      inputH: 1080,
+    });
+    const scale = Object.values(g).find((n) => n.class_type === "ImageScale");
+    assert.equal(scale?.inputs.crop, "disabled");
+    assert.equal(scale?.inputs.width, 1024);
+    assert.equal(scale?.inputs.height, 576);
   });
 });
 

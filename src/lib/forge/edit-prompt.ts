@@ -53,8 +53,10 @@ export function composeI2iPrompt(
   if (remove && !t.toLowerCase().includes(remove.toLowerCase())) extra.push(`remove ${remove}`);
   if (add && !t.toLowerCase().includes(add.toLowerCase())) extra.push(`add ${add}`);
   if (change && !t.toLowerCase().includes(change.toLowerCase())) extra.push(`change ${change}`);
+  const seen = (scan ?? "").replace(/\s+/g, " ").trim();
+  const identity = seen ? `the photo already shows ${seen}` : "";
   const lock =
     "keep everything else in the photo, same person, same face, same pose, same room, same art style, same rendering, same lighting, same colors, same medium, do not restyle, only this edit, do not add extra people extra clothes extra objects extra sex";
-  if (t) return [t, ...extra, lock].join(". ");
+  if (t) return [t, ...extra, identity, lock].filter(Boolean).join(". ");
   return buildEditPrompt({ remove, add, change, scan });
 }

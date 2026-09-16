@@ -131,6 +131,8 @@ export type MediaRef = {
   name: string;
   dataUrl: string;
   folder?: "input" | "output";
+  width?: number;
+  height?: number;
 };
 
 const GENERIC_STILL = /^(still|edit|continue|liked|last|photo)(\.png|\.jpg|\.jpeg|\.webp)?$/i;
@@ -656,6 +658,70 @@ export function sizeForFamily(
   const scale = max / Math.max(base.w, base.h);
   const round = (n: number) => Math.max(512, Math.round((n * scale) / 8) * 8);
   return { w: round(base.w), h: round(base.h) };
+}
+
+/** Keep the dropped photo’s shape so edit does not crop it into 2:3 mush. */
+export function aspectFromSize(w: number, h: number): Aspect {
+  if (!w || !h) return "1:1";
+  const r = w / h;
+  const opts: [Aspect, number][] = [
+    ["1:1", 1],
+    ["3:4", 3 / 4],
+    ["2:3", 2 / 3],
+    ["9:16", 9 / 16],
+    ["4:3", 4 / 3],
+    ["3:2", 3 / 2],
+    ["16:9", 16 / 9],
+    ["21:9", 21 / 9],
+  ];
+  let best: Aspect = "1:1";
+  let d = 99;
+  for (const [a, v] of opts) {
+    const x = Math.abs(r - v);
+    if (x < d) {
+      d = x;
+      best = a;
+    }
+  }
+  return best;
+}
+
+/** Native-ish canvas for img2img: same aspect as the file, capped so the 4080 lives. */
+export function i2iCanvasSize(
+  srcW: number,
+  srcH: number,
+  family: "flux" | "sdxl" | "sd15",
+): { w: number; h: number } {
+  if (!srcW || !srcH) return sizeForFamily(family, "1:1");
+  const max = family === "sd15" ? 768 : 1024;
+  const long = Math.max(srcW, srcH);
+  const scale = long > max ? max / long : long < 384 ? 512 / long : 1;
+  const r8 = (n: number) => Math.max(256, Math.round(n / 8) * 8);
+  return { w: r8(srcW * scale), h: r8(srcH * scale) };
+}
+
+/** Photo scan → a mix that can keep that look. Anime file + real photo = garbage. */
+export function pickEditCheckpoint(tags: string[], current: string, all: string[]): string {
+  const blob = tags.join(" ").toLowerCase();
+  const photo = /\b(photorealistic|realistic|photo|selfie|real life|instagram|dslr|film grain)\b/.test(blob);
+  const drawn = /\b(anime|manga|cartoon|illustration|1girl|1boy|2d)\b/.test(blob) && !photo;
+  const pool = all.filter((n) => isImageCheckpoint(n));
+  const curOk = pool.includes(current) ? current : "";
+  if (photo) {
+    const real = pool.filter(
+      (n) =>
+        /real|epicrealism|uberrealistic|cyberrealistic|photoreal|krea|ponyreal|realspice|analog/i.test(n) &&
+        !/anime|hentai|illustrious|noob|manga/i.test(n),
+    );
+    if (curOk && real.includes(curOk)) return curOk;
+    if (real[0]) return real[0];
+  }
+  if (drawn) {
+    const an = pool.filter((n) => /illustrious|anima|noob|pony|anime|manga/i.test(n));
+    if (curOk && an.includes(curOk)) return curOk;
+    if (an[0]) return an[0];
+  }
+  return curOk || current;
 }
 
 export type LoraLane = "wan" | "flux" | "pony" | "illustrious" | "sdxl" | "sd15" | "any";
