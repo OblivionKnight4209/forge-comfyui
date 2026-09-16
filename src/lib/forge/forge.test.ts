@@ -676,6 +676,31 @@ describe("writer", () => {
     assert.match(gay, /yaoi/i);
     const stripped = keepNeutral("woman, cute, yaoi, school uniform", "woman", "person");
     assert.doesNotMatch(stripped, /cute|yaoi|school uniform/i);
+    const kept = keepNeutral("woman, rape, forced, ahegao", "rape scene forced", "person");
+    assert.match(kept, /rape/i);
+    assert.match(kept, /forced/i);
+  });
+  it("NSFW switch keeps dirty words and fills explicit", () => {
+    const t = writePrompt({
+      flavor: "person",
+      files: [],
+      seed: 8,
+      existing: "woman",
+      family: "sdxl",
+      checkpoint: "DasiwaIllustriousAnime.safetensors",
+      nsfwMode: true,
+    });
+    assert.match(t, /uncensored|explicit|pussy|nipple|fuck/i);
+    const dirty = grokExpand({
+      typed: "rape the warrior",
+      files: DEFAULT_WILDCARDS,
+      seed: 3,
+      family: "sdxl",
+      checkpoint: "DasiwaIllustrious.safetensors",
+      nsfwMode: true,
+    });
+    assert.match(dirty, /rape/i);
+    assert.doesNotMatch(dirty, /tasteful|implied nudity|fade to black/i);
   });
   it("keeps extra scene words after Who, and long prompts split for CLIP", () => {
     const first = writePrompt({

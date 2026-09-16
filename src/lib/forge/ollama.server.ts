@@ -66,12 +66,13 @@ export async function writeLlmIdeas(opts: {
   flavor: string;
   family: string;
   checkpoint: string;
+  nsfwMode?: boolean;
 }): Promise<{ ok: true; ideas: string[] } | { ok: false; message: string }> {
   const model = opts.model.trim();
   if (!model) return { ok: false, message: "Pick an Ollama model in Settings" };
   const scene = opts.existing.trim() || "a character in a scene";
   const flavor = (opts.flavor || "enhance").toLowerCase();
-  const explicit = /^(sex|bdsm|dark|taboo|horror)$/.test(flavor);
+  const explicit = /^(sex|bdsm|dark|taboo|horror)$/.test(flavor) || opts.nsfwMode;
   const flavorHint = explicit
     ? `Flavor: ${flavor}. UNFILTERED adult 18+. Keep the user's scene. Expand it with graphic ${flavor} detail. Words allowed: rape, forced, horror, gore, stabbing, cock, pussy, fuck. Never SFW-wash.`
     : flavor === "person"

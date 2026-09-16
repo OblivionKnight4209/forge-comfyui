@@ -539,7 +539,6 @@ export const useForge = create<ForgeState>()(
         ckptStyle: s.ckptStyle,
         artWrap: s.artWrap,
         qualityPick: s.qualityPick,
-        nsfwMode: s.nsfwMode,
         blankStage: s.blankStage,
         jobCount: s.jobCount,
       }),

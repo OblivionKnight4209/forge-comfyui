@@ -180,11 +180,13 @@ export const PROMPT_FLAVORS: { id: PromptFlavor; label: string; hint: string }[]
 ];
 
 function wantsSexAct(text: string) {
-  return /\b(fuck|fucks|fucked|fucking|rape|pussy|cock|blowjob|handjob|anal|creampie|gangbang|spitroast)\b/i.test(text || "");
+  return /\b(fuck|fucks|fucked|fucking|rape|pussy|cock|blowjob|handjob|anal|creampie|gangbang|spitroast|noncon|forced)\b/i.test(
+    text || "",
+  );
 }
 
 const ADULT_RE =
-  /\b(nude|naked|nsfw|sex|sexy|skimpy|lingerie|lewd|erotic|fuck|cock|pussy|hentai|explicit|topless|porn|cum|blowjob|masturbat|penetrat|barely.{0,12}cloth)\b/i;
+  /\b(nude|naked|nsfw|sex|sexy|skimpy|lingerie|lewd|erotic|fuck|cock|pussy|hentai|explicit|topless|porn|cum|blowjob|masturbat|penetrat|barely.{0,12}cloth|rape|forced|noncon|bdsm|bondage|gore|ahegao|creampie|anal|gangbang|tentacle)\b/i;
 
 export function isAdult(text: string) {
   return ADULT_RE.test(text);
@@ -199,7 +201,7 @@ export function nsfwWanted(text: string, nsfwMode = false): boolean {
   return true;
 }
 
-export function keepNeutral(out: string, user: string, flavor: PromptFlavor): string {
+export function keepNeutral(out: string, user: string, flavor: PromptFlavor, nsfwMode = false): string {
   const u = (user || "").toLowerCase();
   const explicit = /^(sex|bdsm|dark|taboo|horror)$/.test(flavor);
   const allowCute = /\b(cute|kawaii|moe|chibi|adorable|wholesome)\b/.test(u);
@@ -208,10 +210,10 @@ export function keepNeutral(out: string, user: string, flavor: PromptFlavor): st
   const allowSchool = /\b(school|uniform|classroom|sailor)\b/.test(u);
   const allowViewer = /\b(looking at viewer|eye contact|at the camera)\b/.test(u);
   const allowBlush = /\b(blush|flushed)\b/.test(u);
-  const allowSex = explicit || isAdult(u);
+  const allowSex = explicit || nsfwMode || isAdult(u) || wantsSexAct(u);
   let t = out;
   const drop = (re: RegExp) => {
-    t = t.replace(re, " ");
+    t = t.replace(re, (m) => (u.includes(m.toLowerCase()) ? m : " "));
   };
   if (!allowCute) drop(/\b(cute|kawaii|moe|chibi|adorable|wholesome|heart-eyes|heart eyes)\b/gi);
   if (!allowGay) drop(/\b(yaoi|mlm|femboy|twink|bara|otoko no ko|\btrap\b|2boys|1boy|boys love|gay couple)\b/gi);
@@ -504,6 +506,14 @@ const SKIMPY_LOOK = [
   "torn translucent dress clinging to skin",
 ];
 
+const PEOPLE_SEX = [
+  "pussy out, nipples hard, wet, explicit sex, uncensored",
+  "cock in her, mouth open, juices on the thighs",
+  "fucked from behind, tits out, ahegao",
+  "on her back, legs spread, detailed pussy, detailed cock",
+  "clothes ripped off, pinned, explicit penetration",
+];
+
 const MAN_LOOK = {
   body: [
     "adult man, broad shoulders, visible stubble, real proportions",
@@ -739,7 +749,7 @@ export function fillGaps(text: string, anime: boolean, rng: () => number, nsfwMo
   }
   if (!extra.length) return lead;
   const dirty = isAdult(lead) || nsfwWanted(lead, nsfwMode);
-  return keepNeutral(joinScene([lead, ...extra], dirty), lead, dirty ? "sex" : "enhance");
+  return keepNeutral(joinScene([lead, ...extra], dirty), lead, dirty ? "sex" : "enhance", nsfwMode);
 }
 
 function lookFill(text: string, anime: boolean, rng: () => number, nsfwMode = false): string {
@@ -794,6 +804,7 @@ function lookFill(text: string, anime: boolean, rng: () => number, nsfwMode = fa
       } else {
         parts.push(pickFrom(WOMAN_LOOK.body, rng), pickFrom(WOMAN_LOOK.face, rng), pickFrom(WOMAN_LOOK.hair, rng));
         parts.push(isAdult(lead) || nsfwMode ? pickFrom(SKIMPY_LOOK, rng) : pickFrom(WOMAN_LOOK.clothes, rng));
+        if (nsfwMode || isAdult(lead)) parts.push(pickFrom(PEOPLE_SEX, rng));
       }
     }
     if (c.man && !c.goblin && !c.orc && !c.monster) {
@@ -823,7 +834,12 @@ function lookFill(text: string, anime: boolean, rng: () => number, nsfwMode = fa
   if (isAdult(lead) || (nsfwMode && (c.girl || c.man))) {
     parts.push("uncensored", "explicit", "nsfw", "adult 18+");
   }
-  return keepNeutral(joinScene(parts, isAdult(lead) || nsfwMode), lead, isAdult(lead) || nsfwMode ? "sex" : "person");
+  return keepNeutral(
+    joinScene(parts, isAdult(lead) || nsfwMode),
+    lead,
+    isAdult(lead) || nsfwMode ? "sex" : "person",
+    nsfwMode,
+  );
 }
 
 function extrasFor(text: string, anime: boolean, rng: () => number): {
@@ -945,7 +961,7 @@ function grokFill(text: string, anime: boolean, rng: () => number): string {
   ]);
 }
 
-function isDumbLook(scene: string, out: string) {
+function isDumbLook(scene: string, out: string, nsfwMode = false) {
   const s = scene.toLowerCase();
   const o = out.toLowerCase();
   if (/monster|demon|beast|chase|after|fight|ninja/.test(s) && /school uniform|sailor uniform|classroom|messy bed|looking at viewer/.test(o)) {
@@ -957,7 +973,7 @@ function isDumbLook(scene: string, out: string) {
   if (/\b(cat|dog)\b/.test(s) && !/\b(fur|whisker|muzzle|paw|tabby|hackles|fangs|tail|coat)\b/.test(o)) {
     return true;
   }
-  if (!isAdult(s) && /ahegao|masturbat|handjob|ring gag|\banal\b/.test(o)) return true;
+  if (!nsfwMode && !isAdult(s) && /ahegao|masturbat|handjob|ring gag|\banal\b/.test(o)) return true;
   if (out.length < Math.max(24, Math.min(scene.trim().length + 24, 80))) return true;
   return false;
 }
@@ -969,6 +985,7 @@ export function writeIdeas(opts: {
   existing?: string;
   family?: "flux" | "sdxl" | "sd15";
   checkpoint?: string;
+  nsfwMode?: boolean;
 }): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
@@ -980,9 +997,9 @@ export function writeIdeas(opts: {
       seed: opts.seed + i * 9973 + 41,
     });
     if (!t || seen.has(t)) continue;
-    if (opts.flavor === "person" && isDumbLook(scene, t)) continue;
+    if (opts.flavor === "person" && isDumbLook(scene, t, opts.nsfwMode)) continue;
     seen.add(t);
-    out.push(keepNeutral(t, scene, opts.flavor));
+    out.push(keepNeutral(t, scene, opts.flavor, opts.nsfwMode));
   }
   return out;
 }
@@ -1241,6 +1258,7 @@ export function writePrompt(opts: {
   existing?: string;
   family?: "flux" | "sdxl" | "sd15";
   checkpoint?: string;
+  nsfwMode?: boolean;
 }): string {
   const rng = mulberry32(opts.seed);
   const p = (name: string) => pickLine(opts.files, name, rng);
@@ -1269,7 +1287,7 @@ export function writePrompt(opts: {
     const raw = (opts.existing ?? "").trim();
     if (raw) {
       const { expanded } = expandPrompt(raw, opts.files, opts.seed);
-      return keepNeutral(lookFill(expanded, anime, rng), raw, "person");
+      return keepNeutral(lookFill(expanded, anime, rng, opts.nsfwMode), raw, opts.nsfwMode ? "sex" : "person", opts.nsfwMode);
     }
   }
 
@@ -1277,7 +1295,7 @@ export function writePrompt(opts: {
     const raw = (opts.existing ?? "").trim();
     if (!raw) return writePrompt({ ...opts, flavor: "person" });
     const { expanded } = expandPrompt(raw, opts.files, opts.seed);
-    return keepNeutral(lookFill(expanded, anime, rng), raw, "enhance");
+    return keepNeutral(lookFill(expanded, anime, rng, opts.nsfwMode), raw, opts.nsfwMode ? "sex" : "enhance", opts.nsfwMode);
   }
 
   if (opts.flavor === "sex" || opts.flavor === "bdsm" || opts.flavor === "dark" || opts.flavor === "taboo" || opts.flavor === "horror") {
@@ -1315,6 +1333,7 @@ export function writePrompt(opts: {
       joinScene(["adult", clothes, poseA, face, place, lighting, style], false),
       opts.existing ?? "",
       opts.flavor,
+      opts.nsfwMode,
     );
   }
 
@@ -1325,6 +1344,7 @@ export function writePrompt(opts: {
     ),
     opts.existing ?? "",
     opts.flavor,
+    opts.nsfwMode,
   );
 }
 
@@ -1370,7 +1390,8 @@ export function grokExpand(opts: {
   const anime =
     opts.family === "sd15" ||
     (/mix|anime|kitten|illustrious|noob|nai|pony/.test(ckpt) && !ckpt.includes("flux"));
-  const nsfw = nsfwWanted(lead, opts.nsfwMode);
+  const nsfwOn = opts.nsfwMode !== false;
+  const nsfw = nsfwWanted(lead, nsfwOn);
   const sexAct = wantsSexAct(lead);
   const forgeFill =
     /\b(anime illustration|highly detailed anime still|uncensored, explicit, nsfw|detailed hands, detailed eyes)\b/i.test(
@@ -1393,18 +1414,19 @@ export function grokExpand(opts: {
         seed: opts.seed,
         family: opts.family,
         checkpoint: opts.checkpoint,
+        nsfwMode: true,
       }),
       opts.seed,
     );
   } else if (isShortSubject(subject) || forgeFill) {
-    out = lookFill(subject, anime, rng, opts.nsfwMode);
+    out = lookFill(subject, anime, rng, nsfwOn);
   } else {
-    out = fillGaps(lead, anime, rng, opts.nsfwMode);
+    out = fillGaps(lead, anime, rng, nsfwOn);
   }
   const thin = (s: string) =>
     tooClose(s, subject) || tooClose(s, raw) || s.split(/\s+/).length <= subject.split(/\s+/).length + 4;
   if (thin(out) && (isShortSubject(subject) || forgeFill)) {
-    out = lookFill(subject, anime, rng, opts.nsfwMode);
+    out = lookFill(subject, anime, rng, nsfwOn);
   }
   if (thin(out) && isShortSubject(subject)) {
     out = grokFill(subject, anime, mulberry32(opts.seed + 31));

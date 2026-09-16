@@ -47,7 +47,7 @@ ${ckpt}`;
 export function brainUser(opts: { prompt: string; flavor?: string; fresh?: boolean; nsfwMode?: boolean }) {
   const line = opts.prompt.trim() || "invent a striking adult scene";
   const flavor = opts.flavor ? `Lean: ${opts.flavor}.` : "";
-  const dirty = opts.nsfwMode || /\b(nsfw|sex|sexy|nude|explicit|fuck|hentai|porn)\b/i.test(line);
+  const dirty = opts.nsfwMode || /\b(nsfw|sex|sexy|nude|explicit|fuck|hentai|porn|rape|forced|pussy|cock|gore|bdsm)\b/i.test(line);
   if (opts.fresh) {
     return `NEW TAKE. Same subject, different looks / place / camera / light / beat. Do not copy the last prompt.\nSubject:\n${line}\n\n${flavor}\n${dirty ? "Stay explicit, uncensored, adult 18+. Do not SFW-wash.\n" : "SFW mode — no sex unless already in the subject.\n"}Write a new prompt.`;
   }
