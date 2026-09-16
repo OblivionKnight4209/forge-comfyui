@@ -1263,7 +1263,7 @@ describe("wildcards extra", () => {
     assert.match(t, /wolf cut/i);
     assert.doesNotMatch(t, /grey wolf|muzzle|detailed paws|fur flying/i);
   });
-  it("nsfw / explicit in the box uses the sex pack, not sweater vanilla", () => {
+  it("nsfw / explicit in the box stays the girl, not a random gangbang pack", () => {
     const t = grokExpand({
       typed: "anime girl, nsfw, explicit",
       files: DEFAULT_WILDCARDS,
@@ -1272,6 +1272,29 @@ describe("wildcards extra", () => {
       checkpoint: "DasiwaIllustrious.safetensors",
     });
     assert.match(t, /anime girl/i);
+    assert.match(t, /uncensored|nsfw|explicit/i);
+    assert.doesNotMatch(t, /spitroast|bukkake|full nelson|knit sweater/i);
+  });
+  it("tabby and mutt get animal looks, not a castle fight", () => {
+    const t = grokExpand({
+      typed: "orange tabby fighting a brindle mutt in a wet alley",
+      files: DEFAULT_WILDCARDS,
+      seed: 42,
+      family: "sdxl",
+      checkpoint: "DasiwaIllustrious.safetensors",
+    });
+    assert.match(t, /fur|whisker|muzzle|paw|tabby|coat/i);
+    assert.doesNotMatch(t, /flagstone|keep yard|banner torn|dead horse/i);
+  });
+  it("sex words in the box still get an act, not vanilla clothes", () => {
+    const t = grokExpand({
+      typed: "girl getting fucked",
+      files: DEFAULT_WILDCARDS,
+      seed: 8,
+      family: "sdxl",
+      checkpoint: "DasiwaIllustrious.safetensors",
+    });
+    assert.match(t, /fuck/i);
     assert.doesNotMatch(t, /knit sweater|ordinary clothes/i);
   });
   it("short subject is fully filled", () => {
@@ -1339,6 +1362,8 @@ describe("wildcards extra", () => {
       nsfwMode: true,
     });
     assert.match(person, /uncensored|nsfw|explicit/i);
+    assert.match(person, /goblin|warrior|shield|sword|armor/i);
+    assert.doesNotMatch(person, /spitroast|bukkake|full nelson/i);
     const cat = grokExpand({
       typed: "cat fight a dog",
       files: DEFAULT_WILDCARDS,
