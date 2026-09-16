@@ -169,7 +169,7 @@ export function chunkPrompt(text: string, maxChars = 320): string[] {
     } else buf = next;
   }
   if (buf) chunks.push(buf);
-  return chunks.slice(0, 8);
+  return chunks.slice(0, 4);
 }
 
 function encodeLong(

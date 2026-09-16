@@ -1872,11 +1872,10 @@ describe("comic page builder", () => {
     assert.match(page, /panel 1:/i);
     assert.match(page, /panel 4:/i);
     assert.doesNotMatch(page, /same characters, the action continues/i);
-    const script = formatComicScript("cat fight a dog", "2x2", { seed: 3 });
-    assert.match(script, /P1:/);
-    assert.match(script, /P4:/);
-    assert.match(script, /tabby|cat/i);
-    assert.match(script, /dog/i);
+    const six = buildComicPrompt("magical girl vs goblin", "six", "manga ink", { seed: 7 });
+    assert.match(six, /panel 6:/i);
+    assert.ok(six.length < 2000);
+    assert.match(six, /three rows of two|six panels/i);
   });
 });
 

@@ -45,7 +45,7 @@ export const COMIC_LAYOUTS: ComicLayout[] = [
     label: "6-panel",
     hint: "Western grid",
     panels: 6,
-    aspect: "3:4",
+    aspect: "2:3",
     tags: "american comic book page, six panels in three rows of two, thick gutters, sequential art",
   },
   {
@@ -146,9 +146,10 @@ export function inventComicBeats(
   const raw = (script || "").trim() || "two people in a scene";
   const rng = mulberry32((opts?.seed ?? 1) >>> 0);
   const { a, b } = splitSides(raw);
-  const A = comicCast(a);
-  const B = b ? comicCast(b) : "";
-  const both = B ? `${A} AND ${B}, same faces every panel` : `${A}, same face every panel`;
+  const looksA = comicCast(a);
+  const looksB = b ? comicCast(b) : "";
+  const aName = a.trim() || "the lead";
+  const bName = b.trim();
   const nsfw = !!opts?.nsfw || /\b(sex|fuck|rape|nude|nsfw|hentai|pussy|cock)\b/i.test(raw);
   const fight = /\b(vs|versus|fight|battle|war|clash|after|ninja|warrior|goblin|orc)\b/i.test(raw);
   const chase = /\b(chase|run|flee|hunt|after)\b/i.test(raw);
@@ -156,53 +157,53 @@ export function inventComicBeats(
   const place = fight
     ? pick(
         [
-          "torch-lit keep yard, rain on flagstones",
-          "ruined alley at night, wet brick",
-          "forest clearing, moon, broken trees",
-          "castle steps, banners tearing",
+          "torch-lit keep yard",
+          "wet alley at night",
+          "forest clearing, moon",
+          "castle steps",
         ],
         rng,
       )
     : chase
-      ? pick(["narrow alley, rain", "rooftops at night", "crowded market, spilled stalls"], rng)
+      ? pick(["narrow alley", "rooftops", "crowded market"], rng)
       : horror
-        ? pick(["abandoned hallway, one bulb", "graveyard fog", "locked cellar"], rng)
-        : pick(["rooftop at dusk", "rainy street", "small room, lamp", "school rooftop at night, adults 18+"], rng);
+        ? pick(["abandoned hallway", "graveyard fog", "locked cellar"], rng)
+        : pick(["rooftop at dusk", "rainy street", "small lamp-lit room"], rng);
 
-  const setup = B
-    ? `${both}, establishing wide shot, ${place}, they have not hit yet, title energy`
-    : `${both}, establishing shot, ${place}, the scene is about to start`;
-  const approach = B
-    ? `${both}, they close the distance, eyes locked, ${place}`
-    : `${A}, steps forward, ${place}`;
-  const clash = B
+  const setup = looksB
+    ? `${looksA} faces ${looksB}, wide establishing, ${place}, before the hit`
+    : `${looksA}, establishing shot, ${place}`;
+  const approach = bName
+    ? `${aName} closes in, ${bName} waiting, ${place}`
+    : `${aName} steps forward, ${place}`;
+  const clash = bName
     ? fight
-      ? `${both}, first hit, impact lines, ${place}, close on the clash`
+      ? `${aName} and ${bName} clash, impact lines, ${place}`
       : chase
-        ? `${both}, the chase is on, motion lines, ${place}`
-        : `${both}, they meet, ${place}`
-    : `${A}, the action starts, motion lines, ${place}`;
-  const turn = B
+        ? `${aName} chases ${bName}, motion lines, ${place}`
+        : `${aName} meets ${bName}, ${place}`
+    : `${aName}, the action starts, motion lines, ${place}`;
+  const turn = bName
     ? nsfw && fight
-      ? `${both}, ${A} pinned, clothes tearing, ${B} over them, explicit, ${place}`
+      ? `${aName} pinned by ${bName}, clothes tearing, explicit, ${place}`
       : fight
-        ? `${both}, ${B} lands a heavy blow, ${A} staggered, reaction close-up, ${place}`
-        : `${both}, the turn, shock on the face, ${place}`
+        ? `${bName} lands a blow, ${aName} staggered, close-up, ${place}`
+        : `${aName} and ${bName}, the turn, shock, ${place}`
     : nsfw
-      ? `${A}, clothes off, explicit act, uncensored, ${place}`
-      : `${A}, the turn, something goes wrong, ${place}`;
-  const second = B
-    ? `${both}, second clash, dirt and blood, ${place}, low angle`
-    : `${A}, pushes through, ${place}`;
-  const finish = B
+      ? `${aName}, clothes off, explicit, ${place}`
+      : `${aName}, something goes wrong, ${place}`;
+  const second = bName
+    ? `${aName} and ${bName} second clash, dirt, low angle, ${place}`
+    : `${aName} pushes through, ${place}`;
+  const finish = bName
     ? nsfw
-      ? `${both}, last panel, explicit finish, bodies wrecked, uncensored, ${place}, punchline`
+      ? `${aName} and ${bName}, last panel, explicit finish, ${place}`
       : fight
-        ? `${both}, last panel, the finishing blow, winner standing, ${place}, punchline`
-        : `${both}, last panel, the beat lands, ${place}, punchline`
+        ? `${aName} and ${bName}, last panel, finishing blow, ${place}`
+        : `${aName} and ${bName}, last panel, the beat lands, ${place}`
     : nsfw
-      ? `${A}, last panel, explicit, uncensored, after, ${place}`
-      : `${A}, last panel, the moment lands, ${place}, punchline`;
+      ? `${aName}, last panel, explicit, ${place}`
+      : `${aName}, last panel, punchline, ${place}`;
 
   const pool =
     n <= 1
@@ -270,16 +271,17 @@ export function buildComicPrompt(
 ): string {
   const layout = COMIC_LAYOUTS.find((l) => l.id === layoutId) || COMIC_LAYOUTS[1];
   const beats = comicBeats(script, layout.panels, opts);
-  const panels = beats.map((b, i) => `panel ${i + 1}: ${b}`).join(", ");
-  return [
+  const panels = beats.map((b, i) => `panel ${i + 1}: ${b}`).join("; ");
+  const page = [
     layout.tags,
-    "printed comic page, black gutters, sequential art, the SAME characters in every panel, readable page",
+    "printed comic page, black gutters, sequential art, SAME faces, same characters in every panel, readable",
     panels,
     inkTags.trim(),
-    "inked, on paper, not a photograph, not a photo collage, not 3d render",
+    "inked on paper, not a photograph, not a 3d render",
   ]
     .filter(Boolean)
     .join(", ");
+  return page.length > 1800 ? `${page.slice(0, 1790).replace(/[,;]\s*[^,;]*$/, "")}, readable comic page` : page;
 }
 
 export function formatComicScript(script: string, layoutId: string, opts?: { nsfw?: boolean; seed?: number }): string {

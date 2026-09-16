@@ -2212,12 +2212,13 @@ export function Studio() {
         }),
         nextSeed,
       );
+      settingsNow = { ...settingsNow, hires: false, batchSize: 1 };
     }
     if (runMode === "i2i" && !/same art style/i.test(sent)) {
       sent = `${sent}, same art style, same rendering, same lighting, same colors, do not restyle`;
     }
     let finalPrompt = triggerPrefix(stacked, sent);
-    if (runMode !== "i2i") {
+    if (runMode !== "i2i" && tab !== "comic") {
       finalPrompt = applyArtWrap(finalPrompt, useForge.getState().artWrap);
       finalPrompt = applyQualityOffers(finalPrompt, useForge.getState().qualityPick);
       if (qualityWantsHires(useForge.getState().qualityPick) && !settingsNow.hires) {
@@ -2488,7 +2489,7 @@ export function Studio() {
     <div className="flex min-h-dvh flex-col bg-bg pb-8 text-fg">
       <header className="flex flex-wrap items-center gap-2 px-3 py-3 md:gap-3 md:px-6">
         <p className="text-[15px] font-medium tracking-tight">Forge</p>
-        <span className="text-[11px] tabular-nums text-subtle">214</span>
+        <span className="text-[11px] tabular-nums text-subtle">215</span>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {meta.video ? (
             <select
