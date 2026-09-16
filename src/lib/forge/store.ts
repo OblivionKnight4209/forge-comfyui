@@ -175,7 +175,16 @@ export const useForge = create<ForgeState>()(
         set({
           mode,
           media,
-          denoise: mode === "i2i" || mode === "v2v" ? (cur.denoise === 1 ? 0.6 : cur.denoise) : cur.denoise,
+          denoise:
+            mode === "i2i"
+              ? cur.denoise >= 0.6
+                ? 0.42
+                : cur.denoise
+              : mode === "v2v"
+                ? cur.denoise === 1
+                  ? 0.6
+                  : cur.denoise
+                : cur.denoise,
         });
       },
       setPrompt: (prompt) => set({ prompt }),

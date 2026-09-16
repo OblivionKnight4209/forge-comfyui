@@ -35,7 +35,7 @@ export function buildEditPrompt(opts: {
   if (!bits.length) return "";
   const seen = (opts.scan ?? "").replace(/\s+/g, " ").trim();
   const keep =
-    "keep the same person, same face, same body, same pose, same camera, same background unless told to change it, only those edits";
+    "keep the same person, same face, same body, same pose, same camera, same background unless told to change it, same art style, same rendering, same lighting, same colors, same medium, do not restyle, only those edits";
   return [seen ? `the photo already shows ${seen}` : "", ...bits, keep].filter(Boolean).join(". ");
 }
 
@@ -53,6 +53,8 @@ export function composeI2iPrompt(
   if (remove && !t.toLowerCase().includes(remove.toLowerCase())) extra.push(`remove ${remove}`);
   if (add && !t.toLowerCase().includes(add.toLowerCase())) extra.push(`add ${add}`);
   if (change && !t.toLowerCase().includes(change.toLowerCase())) extra.push(`change ${change}`);
-  if (t) return [t, ...extra, "keep everything else in the photo, same person, same face, same pose, same room, only this edit, do not add extra people extra clothes extra objects extra sex"].join(". ");
-  return buildEditPrompt({ remove, add, change });
+  const lock =
+    "keep everything else in the photo, same person, same face, same pose, same room, same art style, same rendering, same lighting, same colors, same medium, do not restyle, only this edit, do not add extra people extra clothes extra objects extra sex";
+  if (t) return [t, ...extra, lock].join(". ");
+  return buildEditPrompt({ remove, add, change, scan });
 }

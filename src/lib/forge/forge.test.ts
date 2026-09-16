@@ -285,6 +285,10 @@ describe("i2i denoise", () => {
     assert.ok(i2iDenoise(0.5, true) >= 0.4);
     assert.ok(i2iDenoise(0.5, true) <= 0.75);
   });
+  it("keeps style with a low denoise on small edits", () => {
+    assert.ok(i2iDenoise(0.65, false) <= 0.48);
+    assert.ok(i2iDenoise(0.65, true) <= 0.58);
+  });
 });
 
 describe("modes", () => {
@@ -1378,6 +1382,7 @@ describe("edit prompt is separate", () => {
     const t = composeI2iPrompt("remove her jacket, keep the face", { remove: "shirt", add: "red jacket" });
     assert.match(t, /^remove her jacket, keep the face/);
     assert.match(t, /add red jacket/);
+    assert.match(t, /same art style/i);
     assert.doesNotMatch(t, /the photo already shows/);
   });
   it("empty box still uses take-out lines", () => {

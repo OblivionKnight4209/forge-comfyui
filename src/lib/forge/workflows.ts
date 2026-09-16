@@ -663,9 +663,10 @@ function wanVideo(args: BuildArgs): ApiPrompt {
 }
 
 export function i2iDenoise(denoise: number, structural: boolean) {
-  const n = Number.isFinite(denoise) ? denoise : 0.55;
-  if (n >= 0.95) return structural ? 0.62 : 0.52;
-  return Math.min(0.75, Math.max(0.4, n));
+  const n = Number.isFinite(denoise) ? denoise : 0.42;
+  if (n >= 0.95) return structural ? 0.55 : 0.42;
+  if (structural) return Math.min(0.58, Math.max(0.45, n));
+  return Math.min(0.48, Math.max(0.32, n));
 }
 
 export function validateApiGraph(graph: ApiPrompt): string[] {

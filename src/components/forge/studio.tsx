@@ -1668,7 +1668,12 @@ export function Studio() {
       : state.settings.checkpoint || state.settings.fluxUnet;
     const fam = guessArch(loraCkpt);
     const liveLoras = useForge.getState().loras;
-    const picked = pickLorasForPrompt(userPrompt, liveLoras, fam, loraCkpt);
+    const picked = pickLorasForPrompt(
+      runMode === "i2i" ? "" : userPrompt,
+      runMode === "i2i" ? liveLoras.filter((l) => l.enabled) : liveLoras,
+      fam,
+      loraCkpt,
+    );
     const match = { ok: picked.ok, blocked: picked.blocked, family: fam };
     for (const l of picked.dropped) {
       useForge.getState().upsertLora({ ...l, enabled: false });
@@ -1728,7 +1733,24 @@ export function Studio() {
         userPrompt,
         runMode === "i2v" || runMode === "ref2v" || runMode === "v2v" ? "still-lock" : "invent",
       );
-    } else if (runMode === "t2i" || runMode === "i2i" || runMode === "ref2i") {
+    } else if (runMode === "t2i") {
+      sent = flattenPrompt(
+        grokExpand({
+          typed: parsed.expanded,
+          files: state.wildcards,
+          seed: nextSeed,
+          family: fam === "sd15" || fam === "flux" || fam === "sdxl" ? fam : "sdxl",
+          checkpoint: settingsNow.checkpoint,
+          roll: state.promptRoll,
+        }),
+        nextSeed,
+      );
+    } else if (runMode === "i2i") {
+      sent = parsed.expanded;
+      if (!/same art style/i.test(sent)) {
+        sent = `${sent}, same art style, same rendering, same lighting, same colors, do not restyle`;
+      }
+    } else if (runMode === "ref2i") {
       sent = flattenPrompt(
         grokExpand({
           typed: parsed.expanded,
@@ -1742,10 +1764,12 @@ export function Studio() {
       );
     }
     let finalPrompt = triggerPrefix(stacked, sent);
-    finalPrompt = applyArtWrap(finalPrompt, useForge.getState().artWrap);
-    finalPrompt = applyQualityOffers(finalPrompt, useForge.getState().qualityPick);
-    if (qualityWantsHires(useForge.getState().qualityPick) && !settingsNow.hires) {
-      settingsNow = { ...settingsNow, hires: true };
+    if (runMode !== "i2i") {
+      finalPrompt = applyArtWrap(finalPrompt, useForge.getState().artWrap);
+      finalPrompt = applyQualityOffers(finalPrompt, useForge.getState().qualityPick);
+      if (qualityWantsHires(useForge.getState().qualityPick) && !settingsNow.hires) {
+        settingsNow = { ...settingsNow, hires: true };
+      }
     }
     if (runMode === "ref2i") {
       finalPrompt = `unified single scene combining the reference photos, not a split collage, not a grid, ${finalPrompt}`;
@@ -1976,7 +2000,7 @@ export function Studio() {
     <div className="flex min-h-dvh flex-col bg-bg pb-8 text-fg">
       <header className="flex items-center gap-3 px-4 py-3 md:px-6">
         <p className="text-[15px] font-medium tracking-tight">Forge</p>
-        <span className="text-[11px] tabular-nums text-subtle">179</span>
+        <span className="text-[11px] tabular-nums text-subtle">180</span>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {meta.video ? (
             <select

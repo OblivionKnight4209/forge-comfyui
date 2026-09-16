@@ -17,7 +17,7 @@ import {
   type Mode,
 } from "./types";
 import { applyArtWrap, applyQualityOffers, qualityWantsHires } from "./looks";
-import { buildApiWorkflow, pickLorasForPrompt, rewireLoadImages, triggerPrefix } from "./workflows";
+import { buildApiWorkflow, pickLorasForPrompt, rewireLoadImages, triggerPrefix, i2iDenoise } from "./workflows";
 import { grokExpand, grokMotion } from "./wildcards";
 import { probeComfy, queuePrompt, uploadToComfy } from "./comfy.server";
 
@@ -86,20 +86,27 @@ export async function runGenerateIntent(intent: GenerateIntent) {
     if (!settings.wanClip) return { ok: false as const, message: "No umt5 / WAN CLIP on the PC." };
   }
 
-  const wrapped = applyQualityOffers(applyArtWrap(promptIn, intent.artWrap || "none"), intent.quality || []);
-  if (qualityWantsHires(intent.quality || [])) settings.hires = true;
+  const i2i = intent.mode === "i2i";
+  const wrapped = i2i
+    ? promptIn
+    : applyQualityOffers(applyArtWrap(promptIn, intent.artWrap || "none"), intent.quality || []);
+  if (!i2i && qualityWantsHires(intent.quality || [])) settings.hires = true;
   const sent = video
     ? grokMotion(wrapped, intent.mode === "i2v" || intent.mode === "ref2v" ? "still-lock" : "invent")
-    : grokExpand({
-        typed: wrapped,
-        files: [],
-        seed: intent.seed || 1,
-        checkpoint: settings.checkpoint,
-        roll: intent.roll || "normal",
-      });
+    : i2i
+      ? /same art style/i.test(promptIn)
+        ? promptIn
+        : `${promptIn}, same art style, same rendering, same lighting, same colors, same camera, do not restyle, only the requested edit`
+      : grokExpand({
+          typed: wrapped,
+          files: [],
+          seed: intent.seed || 1,
+          checkpoint: settings.checkpoint,
+          roll: intent.roll || "normal",
+        });
   const loraCkpt = video ? settings.wanUnet || settings.checkpoint : settings.checkpoint;
   const stacked = pickLorasForPrompt(
-    promptIn,
+    i2i ? "" : promptIn,
     intent.loras ?? [],
     guessArch(loraCkpt),
     loraCkpt,
@@ -108,13 +115,21 @@ export async function runGenerateIntent(intent: GenerateIntent) {
   const neg = generateNegative(intent.negative || "", settings.checkpoint, finalPrompt, intent.negLocked);
 
   const images = intent.images ?? [];
+  const denoise = i2i
+    ? i2iDenoise(
+        intent.denoise ?? 0.42,
+        /\b(remove|undress|take off|strip|add |change |replace |delete |put on|clothes|shirt|dress|nude|naked)\b/i.test(
+          promptIn,
+        ),
+      )
+    : (intent.denoise ?? 0.65);
   const api = buildApiWorkflow({
     mode: intent.mode,
     prompt: finalPrompt,
     negative: neg,
     seed: intent.seed || Math.floor(Math.random() * 1_000_000_000),
     aspect: intent.aspect || "1:1",
-    denoise: intent.denoise ?? 0.65,
+    denoise,
     loras: stacked,
     settings,
     imageCount: images.length,
