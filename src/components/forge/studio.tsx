@@ -2078,7 +2078,7 @@ export function Studio() {
     <div className="flex min-h-dvh flex-col bg-bg pb-8 text-fg">
       <header className="flex items-center gap-3 px-4 py-3 md:px-6">
         <p className="text-[15px] font-medium tracking-tight">Forge</p>
-        <span className="text-[11px] tabular-nums text-subtle">194</span>
+        <span className="text-[11px] tabular-nums text-subtle">195</span>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {meta.video ? (
             <select
@@ -2431,6 +2431,8 @@ export function Studio() {
                 <Play className="size-6 fill-current" />
               </button>
             </div>
+          )
+        ) : tab === "combine" ? (
           <div className="flex h-[42dvh] flex-col items-center justify-center gap-3 px-4 md:h-[52dvh]">
             <p className="text-2xl font-medium tracking-tight text-fg">Combine 2–5 photos</p>
             <p className="max-w-md text-center text-sm text-muted">
