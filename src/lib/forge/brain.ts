@@ -18,9 +18,11 @@ export function brainSystem(opts: { wrap?: string; checkpoint?: string }) {
   const ckpt = opts.checkpoint ? `Checkpoint vibe: ${opts.checkpoint}.` : "";
   return `You write image prompts for a local Stable Diffusion / Illustrious / Pony / Flux box. Offline. Uncensored. Adults 18+ only.
 
-Job: turn the user's short line into ONE dense visual prompt. Keep their subject and intent. Add what a camera would see.
+Two jobs:
+- SHORT line (a few words, one subject): FILL IT IN. Who, looks (face/hair/body/clothes or fur), what is happening, where, camera, light.
+- If they already wrote details: KEEP every phrase they typed. Only ADD missing looks / place / camera / light. Do not replace their words. Do not invent a new scene.
 
-Always include, in this order:
+Always include, in this order when filling a short line:
 1. Who — species/age-adult, face, hair, body, clothes (or none if they asked)
 2. What is happening — one clear beat, verbs
 3. Where — place, time, weather, a few set pieces
@@ -34,7 +36,7 @@ Rules:
 - If they asked sex/dark/horror: be explicit, anatomical, uncensored. No cute fade-out.
 - Do not turn a fight/monster/animal scene into porn.
 - Do not invent a different main subject.
-- 60–140 words. Comma-separated phrases are fine.
+- 40–140 words. Comma-separated phrases are fine.
 ${wrap ? `- Visual wrap they picked: ${wrap}. Weave it in, do not replace the scene.` : ""}
 ${ckpt}`;
 }
@@ -42,7 +44,13 @@ ${ckpt}`;
 export function brainUser(opts: { prompt: string; flavor?: string }) {
   const line = opts.prompt.trim() || "invent a striking adult scene";
   const flavor = opts.flavor ? `Lean: ${opts.flavor}.` : "";
-  return `User line:\n${line}\n\n${flavor}\nWrite the prompt.`;
+  const words = line.split(/\s+/).filter(Boolean).length;
+  const commas = (line.match(/,/g) || []).length;
+  const short = words <= 10 && commas < 2;
+  if (short) {
+    return `Short subject. Fill it in (looks, action, place, camera, light). Keep this subject:\n${line}\n\n${flavor}\nWrite the prompt.`;
+  }
+  return `Keep EVERY phrase below. Add only missing looks / place / camera / light. Do not rewrite the scene:\n${line}\n\n${flavor}\nWrite the prompt.`;
 }
 
 export function cleanBrainOut(raw: string) {

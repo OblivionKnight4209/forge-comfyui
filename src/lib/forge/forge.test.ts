@@ -48,7 +48,7 @@ import {
   chunkPrompt,
 } from "./workflows.ts";
 import { isVideoName, mediaMime, withVideoDataUrl } from "./media-mime.ts";
-import { expandPrompt, parseInlineLoras, writePrompt, keepNeutral, userLead, grokExpand, grokMotion, flattenPrompt, withRandomBlocks, recoverScene, isPurpleProse, DEFAULT_WILDCARDS, isAdult, composeNewScene } from "./wildcards.ts";
+import { expandPrompt, parseInlineLoras, writePrompt, keepNeutral, userLead, grokExpand, grokMotion, flattenPrompt, withRandomBlocks, recoverScene, isPurpleProse, DEFAULT_WILDCARDS, isAdult, composeNewScene, isShortSubject } from "./wildcards.ts";
 import { isWashed, nsfwGroup, writeExtreme, writeHorrorSet, writeTabooSet, writeDarkSet, NSFW_TYPES, writeMenus, FACE_BITS, BODY_BITS, CLOTHES_BITS, PLACE_BITS } from "./extreme.ts";
 import { applyArtWrap, applyQualityOffers, qualityWantsHires, randomSceneLine, LOOK_APPENDS } from "./looks.ts";
 import { pickBrainModel, cleanBrainOut, brainSystem } from "./brain.ts";
@@ -1273,6 +1273,34 @@ describe("wildcards extra", () => {
     });
     assert.match(t, /anime girl/i);
     assert.doesNotMatch(t, /knit sweater|ordinary clothes/i);
+  });
+  it("short subject is fully filled", () => {
+    assert.equal(isShortSubject("cat"), true);
+    assert.equal(isShortSubject("orange tabby in a wet alley, fur flying, low angle"), false);
+    const t = grokExpand({
+      typed: "cat",
+      files: DEFAULT_WILDCARDS,
+      seed: 3,
+      family: "sdxl",
+      checkpoint: "DasiwaIllustrious.safetensors",
+    });
+    assert.match(t, /\bcat\b/i);
+    assert.ok(t.split(/\s+/).length > 8);
+  });
+  it("keeps typed details and only fills missing camera/light", () => {
+    const typed = "orange tabby fighting a brindle mutt in a wet alley, fur flying";
+    const t = grokExpand({
+      typed,
+      files: DEFAULT_WILDCARDS,
+      seed: 12,
+      family: "sdxl",
+      checkpoint: "DasiwaIllustrious.safetensors",
+    });
+    assert.match(t, /orange tabby/i);
+    assert.match(t, /wet alley/i);
+    assert.match(t, /brindle mutt/i);
+    assert.doesNotMatch(t, /keep yard|shield bash|flagstone/i);
+    assert.match(t, /low angle|wide|full body|overcast|streetlamp|light|shot/i);
   });
   it("reports missing lists and can expand twice (no lastIndex leak)", () => {
     const files = [{ name: "color", lines: ["red"] }];

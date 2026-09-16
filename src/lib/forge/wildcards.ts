@@ -567,6 +567,64 @@ const FIGHT_BEAT = [
   "she kicks mud, shield bash, he scrabbles aside",
 ];
 
+function hasLook(s: string) {
+  return /\b(hair|eyes|skin|fur|armor|jacket|dress|shirt|coat|body|face|ear|teeth|tabby|whisker|muzzle|paw|fang|hackles|loincloth|breastplate|slit pupils)\b/i.test(
+    s,
+  );
+}
+function hasShot(s: string) {
+  return /\b(close-?up|wide shot|wide action|low angle|from behind|full body|medium shot|pov|over-?the-?shoulder|eye level|three-quarter|upper body)\b/i.test(
+    s,
+  );
+}
+function hasLight(s: string) {
+  return /\b(light|sun|moon|lamp|overcast|neon|rim light|golden hour|torch|shadow|daylight|streetlamp|window light)\b/i.test(
+    s,
+  );
+}
+
+/** A few words, almost no commas — treat as a subject to fully fill. */
+export function isShortSubject(text: string) {
+  const t = (text || "").replace(/\s+/g, " ").trim();
+  const words = t.split(/\s+/).filter(Boolean);
+  const commas = (t.match(/,/g) || []).length;
+  return words.length > 0 && words.length <= 10 && commas < 2;
+}
+
+/** Keep every phrase they typed. Only add missing looks / place / camera / light. */
+export function fillGaps(text: string, anime: boolean, rng: () => number): string {
+  const lead = (text || "").replace(/\s+/g, " ").trim();
+  if (!lead) return lead;
+  if (isShortSubject(lead)) return lookFill(lead, anime, rng);
+  const extra: string[] = [];
+  const x = extrasFor(lead, anime, rng);
+  const c = lookCast(lead);
+  if (!hasLook(lead)) {
+    if (c.animals.length) {
+      for (const a of c.animals) extra.push(...animalBits(a, rng));
+    } else if (c.goblin) {
+      extra.push(pickFrom(GOBLIN_LOOK.body, rng), pickFrom(GOBLIN_LOOK.head, rng));
+    } else if (c.girl) {
+      extra.push(pickFrom(WOMAN_LOOK.body, rng), pickFrom(WOMAN_LOOK.hair, rng));
+    } else if (c.man && !c.goblin && !c.orc && !c.monster) {
+      extra.push(pickFrom(MAN_LOOK.body, rng), pickFrom(MAN_LOOK.hair, rng));
+    } else if (c.monster) {
+      extra.push(pickFrom(MONSTER_BODY, rng), pickFrom(MONSTER_HEAD, rng));
+    }
+  }
+  if (!hasPlace(lead) && x.place) extra.push(x.place);
+  if (!hasShot(lead)) extra.push(x.shot);
+  if (!hasLight(lead)) extra.push(x.light);
+  if (!/detailed (hands|eyes|skin|fur)/i.test(lead)) {
+    extra.push(c.animals.length && !c.girl && !c.man ? "detailed fur" : "detailed hands", "detailed eyes");
+  }
+  if (!/anime illustration|photograph|sharp focus|highly detailed/i.test(lead)) {
+    extra.push(anime ? "anime illustration" : "photograph");
+  }
+  if (!extra.length) return lead;
+  return keepNeutral(joinScene([lead, ...extra], isAdult(lead)), lead, "enhance");
+}
+
 function lookFill(text: string, anime: boolean, rng: () => number): string {
   const lead = userLead(text);
   const c = lookCast(lead);
@@ -1152,10 +1210,11 @@ export function grokExpand(opts: {
   const raw = (opts.typed ?? "").replace(/\s+/g, " ").trim();
   if (!raw) return raw;
   const { expanded: wild } = expandPrompt(raw, opts.files, opts.seed);
-  const dump =
+  const dumped =
     isPurpleProse(wild) ||
-    /pores|subsurface scatter|flagstone|keep yard|detailed anatomy|highly detailed anime still/i.test(wild);
-  const lead = dump ? recoverScene(wild) : userLead(wild);
+    (/pores|subsurface scatter|highly detailed anime still/i.test(wild) &&
+      /flagstone|keep yard|shield bash/i.test(wild));
+  const lead = dumped ? recoverScene(wild) || userLead(wild) : wild;
   const ckpt = (opts.checkpoint ?? "").toLowerCase();
   const anime =
     opts.family === "sd15" ||
@@ -1166,28 +1225,32 @@ export function grokExpand(opts: {
     const flat = flattenPrompt(curly, opts.seed);
     if (!tooClose(flat, lead)) return flat;
   }
-  const flavor: PromptFlavor = nsfw ? "sex" : "enhance";
-  let out = flattenPrompt(
-    writePrompt({
-      flavor,
-      existing: lead,
-      files: opts.files,
-      seed: opts.seed,
-      family: opts.family,
-      checkpoint: opts.checkpoint,
-    }),
-    opts.seed,
-  );
+  const rng = mulberry32(opts.seed + 17);
+  let out: string;
+  if (nsfw && isShortSubject(lead)) {
+    out = flattenPrompt(
+      writePrompt({
+        flavor: "sex",
+        existing: lead,
+        files: opts.files,
+        seed: opts.seed,
+        family: opts.family,
+        checkpoint: opts.checkpoint,
+      }),
+      opts.seed,
+    );
+  } else {
+    out = fillGaps(lead, anime, rng);
+  }
   const thin = (s: string) =>
-    tooClose(s, lead) || tooClose(s, raw) || s.split(/\s+/).length <= lead.split(/\s+/).length + 6;
-  if (thin(out)) {
-    const rng = mulberry32(opts.seed + 17);
+    tooClose(s, lead) || tooClose(s, raw) || s.split(/\s+/).length <= lead.split(/\s+/).length + 4;
+  if (thin(out) && isShortSubject(lead)) {
     out = lookFill(lead, anime, rng);
   }
-  if (thin(out)) {
+  if (thin(out) && isShortSubject(lead)) {
     out = grokFill(lead, anime, mulberry32(opts.seed + 31));
   }
-  if (thin(out)) {
+  if (thin(out) && isShortSubject(lead)) {
     out = flattenPrompt(withRandomBlocks(lead, nsfw), opts.seed);
   }
   return out;

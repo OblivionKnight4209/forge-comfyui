@@ -1106,7 +1106,7 @@ export function Studio() {
         ? state.refPrompt.trim() || state.prompt.trim()
         : state.prompt.trim();
     setBrainBusy(true);
-    toast.message("Brain is writing…");
+    logForge("info", "Brain", "Writing…");
     try {
       const r = await lanBrain({
         prompt: line || "invent a striking adult scene",
@@ -1114,16 +1114,39 @@ export function Studio() {
         wrap: state.artWrap,
         checkpoint: state.settings.checkpoint,
       });
+      const fam =
+        state.settings.stillFamily === "sd15" || guessArch(state.settings.checkpoint) === "sd15"
+          ? ("sd15" as const)
+          : state.settings.stillFamily === "flux"
+            ? ("flux" as const)
+            : ("sdxl" as const);
+      const fallback = grokExpand({
+        typed: line || "an adult",
+        files: state.wildcards,
+        seed: Date.now() % 1_000_000_000,
+        family: fam,
+        checkpoint: state.settings.checkpoint,
+        roll: state.promptRoll,
+      });
+      let used = "";
       if (r.ok) {
-        skipIdeaRefresh.current = true;
-        state.setPrompt(r.text);
-        if (state.mode === "ref2i") state.setRefPrompt(r.text);
-        setIdeas([line || "typed", r.text].filter(Boolean).slice(0, 4));
-        toast.success(`Brain (${r.model.split("/").pop()})`);
-        return true;
+        const keep = (line || "")
+          .split(/\s+/)
+          .filter((w) => w.length > 2)
+          .slice(0, 4);
+        const lost = keep.some((w) => !r.text.toLowerCase().includes(w.toLowerCase()));
+        const same = r.text.replace(/\s+/g, " ").trim().toLowerCase() === (line || "").toLowerCase();
+        used = lost || same ? fallback : r.text;
+      } else {
+        used = fallback;
+        logForge("warn", "Brain", r.message);
       }
-      toast.error(r.message);
-      return false;
+      skipIdeaRefresh.current = true;
+      state.setPrompt(used);
+      if (state.mode === "ref2i") state.setRefPrompt(used);
+      setIdeas([line || "typed", used].filter(Boolean).slice(0, 4));
+      logForge("info", "Brain", r.ok ? `Wrote with ${r.model.split("/").pop()}` : "Ollama missed — filled locally");
+      return true;
     } finally {
       setBrainBusy(false);
     }
@@ -2001,7 +2024,7 @@ export function Studio() {
     <div className="flex min-h-dvh flex-col bg-bg pb-8 text-fg">
       <header className="flex items-center gap-3 px-4 py-3 md:px-6">
         <p className="text-[15px] font-medium tracking-tight">Forge</p>
-        <span className="text-[11px] tabular-nums text-subtle">182</span>
+        <span className="text-[11px] tabular-nums text-subtle">183</span>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {meta.video ? (
             <select
