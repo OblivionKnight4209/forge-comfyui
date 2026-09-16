@@ -442,9 +442,7 @@ export function videoSegments(seconds: number) {
   return 1;
 }
 
-export function wanFpsForDuration(seconds: number) {
-  if (seconds >= 15) return 8;
-  if (seconds >= 10) return 10;
+export function wanFpsForDuration(_seconds: number) {
   return 16;
 }
 

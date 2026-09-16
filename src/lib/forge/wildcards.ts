@@ -1348,26 +1348,48 @@ export function writePrompt(opts: {
   );
 }
 
-/** Grok clip: i2v locks the still; t2v invents motion. */
+/** Grok clip: i2v locks the still; t2v invents motion. Motion is the shot, not a still dump. */
 export function grokMotion(typed: string, kind: "still-lock" | "invent" | "continue" = "invent"): string {
   const lead = userLead(recoverScene(typed) || typed || "")
     .replace(/\s+/g, " ")
     .trim();
+  const t = lead.toLowerCase();
+  const bits: string[] = [];
+  if (/\b(fight|clash|punch|kick|battle|slash|vs|versus)\b/.test(t)) {
+    bits.push("they clash, bodies jolt, camera handheld following the hit, dust and cloth snap");
+  } else if (/\b(fuck|sex|thrust|moan|ride|pound|nsfw)\b/.test(t)) {
+    bits.push("hips roll, breath, bodies press, camera holds close, skin sheen, continuous motion");
+  } else if (/\b(run|chase|flee|sprint)\b/.test(t)) {
+    bits.push("running, camera tracks beside, background parallax, hair and cloth stream");
+  } else if (/\b(walk|step|stride)\b/.test(t)) {
+    bits.push("walk cycle, camera tracks, weight shifts, cloth swings");
+  } else if (/\b(kiss|embrace|hug)\b/.test(t)) {
+    bits.push("they lean in, slow, breath, camera eases closer");
+  } else if (/\b(turn|look|glance|blink)\b/.test(t)) {
+    bits.push("head turns, eyes shift, blink, hair drifts");
+  } else if (/\b(fly|leap|jump)\b/.test(t)) {
+    bits.push("they leap, camera tilts up, cloth and hair trail");
+  } else {
+    bits.push("natural body motion, breathing, blink, micro weight shift");
+  }
+  if (/\b(rain|storm|downpour)\b/.test(t)) bits.push("rain streaks, wet hair, droplets on skin, puddles ripple");
+  else if (/\b(wind|gale)\b/.test(t)) bits.push("wind pulls hair and cloth");
+  else if (/\b(fire|torch|flame)\b/.test(t)) bits.push("firelight flickers on faces");
+  else if (/\b(snow|blizzard)\b/.test(t)) bits.push("snow drifts across the lens");
+  if (/\b(close-up|close up|portrait|face)\b/.test(t)) bits.push("slow dolly in, shallow depth");
+  else if (/\b(wide|establishing|full body)\b/.test(t)) bits.push("slow push in from wide");
+  else bits.push("stable camera, slight push in");
+  const lock = "same face, same body, same clothes, same hair, sharp, no morph, no warp, no flicker, no extra limbs";
   if (kind === "still-lock") {
-    const core = lead || "the same people";
-    return `${core}, same face, same body, same clothes, same hair, subtle motion only, breathing, hair drift, cloth shift, sharp focus, no morph, no warp`;
+    const core = lead || "the same people from the photo";
+    return `${core}, the exact photo comes alive, ${bits.join(", ")}, ${lock}`;
   }
   if (kind === "continue") {
     const core = lead || "the same people";
-    return `${core}, next moment, they keep going, continue the motion, same face, same body, same clothes, same hair, camera holds, sharp focus, no morph`;
+    return `${core}, next moment, they keep going, ${bits.join(", ")}, ${lock}`;
   }
-  if (!lead) return "slow camera push in, natural motion, hair and cloth move";
-  const moving =
-    /\b(walk|run|turn|look|kiss|blow|rain|pan|zoom|move|spin|fight|fly|swim|fall|shake|breathe|laugh|cry|dance|thrust|ride)\b/i.test(
-      lead,
-    );
-  const core = moving ? lead : `${lead}, she moves, camera push in`;
-  return `${core}, natural motion, hair and cloth move, sharp focus, high detail, stable camera, clear, cinematic lighting`;
+  if (!lead) return `${bits.join(", ")}, sharp focus, cinematic lighting, ${lock}`;
+  return `${lead}, ${bits.join(", ")}, ${lock}`;
 }
 export function grokExpand(opts: {
   typed: string;

@@ -186,8 +186,8 @@ describe("i2i graph", () => {
     });
     const n = Object.values(g).find((x) => x.class_type === "WanImageToVideo");
     assert.equal(n?.inputs.width, 640);
-    assert.equal(n?.inputs.height, 368);
-    assert.equal(n?.inputs.length, 49);
+    assert.equal(n?.inputs.height, 400);
+    assert.equal(n?.inputs.length, 81);
     const samp = Object.values(g).find((x) => x.class_type === "KSampler");
     assert.equal(samp?.inputs.cfg, 5);
   });
@@ -426,7 +426,7 @@ describe("WAN pair", () => {
     const lat = Object.values(g).find((n) => n.class_type === "WanImageToVideo");
     assert.ok((lat?.inputs.width as number) <= 640);
     assert.ok((lat?.inputs.height as number) <= 512);
-    assert.equal(lat?.inputs.length, 49);
+    assert.equal(lat?.inputs.length, 81);
   });
   it("lean 14B drops dual pass and extra frames", () => {
     const g = graph({
@@ -443,7 +443,7 @@ describe("WAN pair", () => {
     assert.equal(Object.values(g).filter((n) => n.class_type === "KSamplerAdvanced").length, 0);
     assert.ok(classes(g).includes("KSampler"));
     const lat = Object.values(g).find((n) => n.class_type === "WanImageToVideo");
-    assert.equal(lat?.inputs.length, 33);
+    assert.equal(lat?.inputs.length, 49);
   });
   it("Lightspeed dual uses 4 steps cfg 1", () => {
     const g = graph({
@@ -506,13 +506,19 @@ describe("writer", () => {
     const m = grokMotion("she turns her head in the rain");
     assert.match(m, /turns her head/);
     assert.doesNotMatch(m, /pores|subsurface|masterpiece/);
-    assert.match(m, /motion|camera|cloth/i);
+    assert.match(m, /camera|dolly|push|motion/i);
+    assert.match(m, /rain/i);
   });
   it("i2v motion locks the still identity", () => {
     const m = grokMotion("a girl and a dude in the rain", "still-lock");
     assert.match(m, /same face/);
     assert.match(m, /girl and a dude/);
+    assert.match(m, /comes alive|exact photo/i);
     assert.doesNotMatch(m, /she moves/);
+  });
+  it("fight clip gets clash motion", () => {
+    const m = grokMotion("goblin vs warrior", "invent");
+    assert.match(m, /clash|hit|jolt/i);
   });
   it("continue motion keeps identity and asks for the next beat", () => {
     const m = grokMotion("a girl and a dude in the rain", "continue");

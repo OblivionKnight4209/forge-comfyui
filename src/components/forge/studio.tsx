@@ -91,7 +91,7 @@ import {
   type Mode,
   type ModelFamily,
 } from "@/lib/forge/types";
-import { PROMPT_FLAVORS, expandPrompt, grokExpand, writeIdeas, writePrompt, isAdult, flattenPrompt, userLead, recoverScene, composeNewScene, isPurpleProse, sceneCore, tokenOverlap, nsfwWanted, isShortSubject, type PromptFlavor } from "@/lib/forge/wildcards";
+import { PROMPT_FLAVORS, expandPrompt, grokExpand, grokMotion, writeIdeas, writePrompt, isAdult, flattenPrompt, userLead, recoverScene, composeNewScene, isPurpleProse, sceneCore, tokenOverlap, nsfwWanted, isShortSubject, type PromptFlavor } from "@/lib/forge/wildcards";
 import { composeI2iPrompt, expandEditFields } from "@/lib/forge/edit-prompt";
 import { isVideoName, mediaMime, withVideoDataUrl } from "@/lib/forge/media-mime";
 import { writeExtreme, writeDarkSet, writeTabooSet, writeHorrorSet, isWashed, NSFW_TYPES, nsfwGroup, writeMenus, WHO_BITS, WHERE_BITS, MORE_BITS, COMIC_BITS, EVIL_BITS, FACE_BITS, BODY_BITS, CLOTHES_BITS, PLACE_BITS, CAM_BITS, LIGHT_BITS } from "@/lib/forge/extreme";
@@ -2231,6 +2231,16 @@ export function Studio() {
       );
       settingsNow = { ...settingsNow, hires: false, batchSize: 1 };
     }
+    if (runMeta.video) {
+      const kind = opts?.continueVideo ? "continue" : runMode === "i2v" || runMode === "ref2v" ? "still-lock" : "invent";
+      sent = grokMotion(state.prompt || parsed.expanded, kind);
+      settingsNow = {
+        ...settingsNow,
+        videoFrames: wanFrameCount(state.duration),
+        videoFps: wanFpsForDuration(state.duration),
+        batchSize: 1,
+      };
+    }
     if (runMode === "i2i" && !/same art style/i.test(sent)) {
       sent = `${sent}, same art style, same rendering, same lighting, same colors, do not restyle`;
     }
@@ -2305,10 +2315,7 @@ export function Studio() {
       chainOf: opts?.chainOf,
       chainLeft:
         opts?.chainLeft ??
-        (runMeta.video &&
-        !opts?.continueVideo &&
-        !opts?.leanVideo &&
-        !isWan14b(settingsNow.wanUnet)
+        (runMeta.video && !opts?.continueVideo && !opts?.leanVideo
           ? Math.max(0, videoSegments(state.duration) - 1)
           : 0),
     };
@@ -2506,7 +2513,7 @@ export function Studio() {
     <div className="flex min-h-dvh flex-col bg-bg pb-8 text-fg">
       <header className="flex flex-wrap items-center gap-2 px-3 py-3 md:gap-3 md:px-6">
         <p className="text-[15px] font-medium tracking-tight">Forge</p>
-        <span className="text-[11px] tabular-nums text-subtle">216</span>
+        <span className="text-[11px] tabular-nums text-subtle">217</span>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {meta.video ? (
             <select
@@ -3131,7 +3138,7 @@ export function Studio() {
             </p>
             <p className="max-w-sm text-sm text-muted">
               {tab === "video"
-                ? "Library tab for a still as frame 1. Or type below for text-to-video."
+                ? "Drop a still or tap Play on a photo. Type the MOVE (she turns, they clash, rain). Generate makes the clip with sound. 6s / 10s / 15s stitches segments."
                 : "Type below, Generate. One photo lands here. A batch fills the grid. Old files live in Library."}
             </p>
             <span className="rounded-full bg-accent px-5 py-2.5 text-sm text-accent-fg">

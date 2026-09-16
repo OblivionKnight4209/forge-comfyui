@@ -421,15 +421,28 @@ function sdxlStill(args: BuildArgs): ApiPrompt {
 function videoSize(aspect: Aspect, unet = "", lean = false): { w: number; h: number } {
   const five = isWan5b(unet);
   const heavy = isWan14b(unet);
-  if (lean || heavy) {
+  if (lean) {
     switch (aspect) {
       case "9:16":
       case "2:3":
-        return lean ? { w: 384, h: 640 } : { w: 480, h: 640 };
+      case "3:4":
+        return { w: 480, h: 640 };
       case "1:1":
-        return lean ? { w: 384, h: 384 } : { w: 512, h: 512 };
+        return { w: 512, h: 512 };
       default:
-        return lean ? { w: 640, h: 384 } : { w: 640, h: 368 };
+        return { w: 640, h: 384 };
+    }
+  }
+  if (heavy) {
+    switch (aspect) {
+      case "9:16":
+      case "2:3":
+      case "3:4":
+        return { w: 480, h: 720 };
+      case "1:1":
+        return { w: 576, h: 576 };
+      default:
+        return { w: 640, h: 400 };
     }
   }
   if (five) {
@@ -449,6 +462,7 @@ function videoSize(aspect: Aspect, unet = "", lean = false): { w: number; h: num
     case "1:1":
       return { w: 640, h: 640 };
     case "2:3":
+    case "3:4":
       return { w: 480, h: 720 };
     case "3:2":
       return { w: 720, h: 480 };
@@ -480,7 +494,7 @@ function wanVideo(args: BuildArgs): ApiPrompt {
   const s = args.settings;
   const fps = s.videoFps || 16;
   const heavy = isWan14b(s.wanUnet) || isWan14b(s.wanUnetLow);
-  const maxFrames = lean ? 33 : heavy ? 49 : 81;
+  const maxFrames = lean ? 49 : 81;
   const frames = Math.max(17, Math.min(s.videoFrames || maxFrames, maxFrames));
   const i2v = args.mode === "i2v" || args.mode === "ref2v" || args.mode === "v2v";
   const is5b = isWan5b(s.wanUnet);
