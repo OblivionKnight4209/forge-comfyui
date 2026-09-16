@@ -95,7 +95,7 @@ import { PROMPT_FLAVORS, expandPrompt, grokExpand, writeIdeas, writePrompt, isAd
 import { composeI2iPrompt, expandEditFields } from "@/lib/forge/edit-prompt";
 import { isVideoName, mediaMime, withVideoDataUrl } from "@/lib/forge/media-mime";
 import { writeExtreme, writeDarkSet, writeTabooSet, writeHorrorSet, isWashed, NSFW_TYPES, nsfwGroup, writeMenus, WHO_BITS, WHERE_BITS, MORE_BITS, COMIC_BITS, EVIL_BITS, FACE_BITS, BODY_BITS, CLOTHES_BITS, PLACE_BITS, CAM_BITS, LIGHT_BITS } from "@/lib/forge/extreme";
-import { COMIC_LAYOUTS, COMIC_INK, buildComicPrompt } from "@/lib/forge/comic";
+import { COMIC_LAYOUTS, COMIC_INK, buildComicPrompt, formatComicScript } from "@/lib/forge/comic";
 import {
   apiToUiWorkflow,
   buildApiWorkflow,
@@ -1408,6 +1408,14 @@ export function Studio() {
     );
     const first = locals.find((t) => t && t !== core && t.length > core.length + 8) || locals[0] || core;
     skipIdeaRefresh.current = true;
+    if (tab === "comic") {
+      const script = formatComicScript(core, comicLayout, { nsfw: state.nsfwMode, seed });
+      state.setPrompt(script);
+      setIdeas([script]);
+      setDock("write");
+      logForge("info", "Brain", `Comic beats for “${core.slice(0, 40)}”`);
+      return true;
+    }
     state.setPrompt(first);
     if (state.mode === "ref2i") state.setRefPrompt(first);
     setIdeas(locals.filter(Boolean).slice(0, 3));
@@ -1715,11 +1723,10 @@ export function Studio() {
     const typed = (promptRef.current?.value || "").trim();
     const comicPage =
       tab === "comic"
-        ? buildComicPrompt(
-            state.prompt || typed,
-            comicLayout,
-            COMIC_INK.find((x) => x.id === comicInk)?.tags || "",
-          )
+        ? buildComicPrompt(state.prompt || typed, comicLayout, COMIC_INK.find((x) => x.id === comicInk)?.tags || "", {
+            nsfw: state.nsfwMode,
+            seed: state.seed,
+          })
         : "";
     const userPrompt =
       tab === "comic"
@@ -2198,7 +2205,13 @@ export function Studio() {
     let sent = flattenPrompt(parsed.expanded, nextSeed);
     if (tab === "comic") {
       const ink = COMIC_INK.find((x) => x.id === comicInk)?.tags || "";
-      sent = flattenPrompt(buildComicPrompt(state.prompt || parsed.expanded, comicLayout, ink), nextSeed);
+      sent = flattenPrompt(
+        buildComicPrompt(state.prompt || parsed.expanded, comicLayout, ink, {
+          nsfw: state.nsfwMode,
+          seed: nextSeed,
+        }),
+        nextSeed,
+      );
     }
     if (runMode === "i2i" && !/same art style/i.test(sent)) {
       sent = `${sent}, same art style, same rendering, same lighting, same colors, do not restyle`;
@@ -2475,7 +2488,7 @@ export function Studio() {
     <div className="flex min-h-dvh flex-col bg-bg pb-8 text-fg">
       <header className="flex flex-wrap items-center gap-2 px-3 py-3 md:gap-3 md:px-6">
         <p className="text-[15px] font-medium tracking-tight">Forge</p>
-        <span className="text-[11px] tabular-nums text-subtle">213</span>
+        <span className="text-[11px] tabular-nums text-subtle">214</span>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {meta.video ? (
             <select
@@ -3048,8 +3061,8 @@ export function Studio() {
           <div className="flex h-[42dvh] flex-col items-center justify-center gap-3 px-4 md:h-[52dvh]">
             <p className="text-2xl font-medium tracking-tight text-fg">Build a comic page</p>
             <p className="max-w-md text-center text-sm text-muted">
-              Type the story below. One beat per line, or <span className="text-fg">P1:</span> <span className="text-fg">P2:</span>.
-              Pick a layout. Generate makes one printed page — same characters in every panel.
+              Type a short line — Forge writes the panel scenes (setup, clash, turn, finish).
+              Or write <span className="text-fg">P1:</span> <span className="text-fg">P2:</span> yourself. Same faces every panel.
             </p>
             <div className="flex flex-wrap justify-center gap-1.5">
               {COMIC_LAYOUTS.map((l) => (

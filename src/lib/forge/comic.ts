@@ -77,10 +77,150 @@ export const COMIC_INK: { id: string; label: string; tags: string }[] = [
   { id: "webtoon-color", label: "Webtoon color", tags: "full color webtoon painting, clean digital, soft shade" },
 ];
 
+function mulberry32(a: number) {
+  return () => {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function pick<T>(xs: T[], rng: () => number): T {
+  return xs[Math.floor(rng() * xs.length)] ?? xs[0]!;
+}
+
+/** Looks for a short name so each panel draws the same people. */
+export function comicCast(name: string): string {
+  const t = (name || "").trim();
+  const l = t.toLowerCase();
+  if (/magical girl|mahou shoujo|henshin/.test(l))
+    return "adult magical girl, twin tails, frilly minidress, sailor collar, chest bow, wand, transformation brooch, 18+";
+  if (/goblin/.test(l))
+    return "short wiry adult goblin, long hooked nose, huge pointed ears, yellow slit eyes, needle teeth, olive warty skin, filthy loincloth";
+  if (/\borc\b/.test(l))
+    return "hulking adult orc, tusks, green-grey hide, iron pauldron, thick neck";
+  if (/warrior|knight|paladin/.test(l))
+    return "adult warrior, dented breastplate, mud on the greaves, sword or shield, fierce eyes, 18+";
+  if (/ninja/.test(l)) return "adult ninja, dark wraps, mask, short blade, 18+";
+  if (/witch|sorcer/.test(l)) return "adult witch, long hair, dark robe, glowing hands, 18+";
+  if (/demon|devil/.test(l)) return "adult demon, horns, marked skin, claws, 18+";
+  if (/monster|beast/.test(l))
+    return "hulking monster, too-long arms, maw of teeth, hide and bone ridges";
+  if (/\bcat\b/.test(l)) return "small compact tabby cat, yellow eyes, white whiskers, claws out, hackles up";
+  if (/\bdog\b|husky/.test(l)) return "stocky dog, bristled coat, bared teeth, torn ear";
+  if (/\bwolf\b/.test(l)) return "lean wolf, grey ruff, yellow eyes, bared fangs";
+  if (/girl|woman|female|her\b/.test(l))
+    return `${t}, adult woman, real proportions, clear face, 18+`;
+  if (/man|male|guy|him\b/.test(l)) return `${t}, adult man, stubble, real proportions, 18+`;
+  return t || "the same lead";
+}
+
+function splitSides(script: string): { a: string; b: string; rest: string } {
+  const t = script.replace(/\s+/g, " ").trim();
+  const m = t.split(/\b(?:vs\.?|versus|against|fights?|fighting|after|vs)\b/i);
+  if (m.length >= 2) {
+    return { a: m[0]!.trim(), b: m[1]!.trim(), rest: t };
+  }
+  const and = t.split(/\b(?:and|&)\b/i);
+  if (and.length >= 2 && and[0]!.trim().split(/\s+/).length <= 5) {
+    return { a: and[0]!.trim(), b: and[1]!.trim(), rest: t };
+  }
+  return { a: t, b: "", rest: t };
+}
+
+export function isPanelScript(script: string): boolean {
+  const t = (script || "").trim();
+  if (!t) return false;
+  if (/\b(?:p(?:anel)?\s*\d+|panel\s*\d+\s*:)/i.test(t)) return true;
+  if (t.split(/\n/).filter((l) => l.trim()).length >= 2) return true;
+  return false;
+}
+
+export function inventComicBeats(
+  script: string,
+  n: number,
+  opts?: { nsfw?: boolean; seed?: number },
+): string[] {
+  const raw = (script || "").trim() || "two people in a scene";
+  const rng = mulberry32((opts?.seed ?? 1) >>> 0);
+  const { a, b } = splitSides(raw);
+  const A = comicCast(a);
+  const B = b ? comicCast(b) : "";
+  const both = B ? `${A} AND ${B}, same faces every panel` : `${A}, same face every panel`;
+  const nsfw = !!opts?.nsfw || /\b(sex|fuck|rape|nude|nsfw|hentai|pussy|cock)\b/i.test(raw);
+  const fight = /\b(vs|versus|fight|battle|war|clash|after|ninja|warrior|goblin|orc)\b/i.test(raw);
+  const chase = /\b(chase|run|flee|hunt|after)\b/i.test(raw);
+  const horror = /\b(horror|gore|kill|stab|blood|undead|zombie)\b/i.test(raw);
+  const place = fight
+    ? pick(
+        [
+          "torch-lit keep yard, rain on flagstones",
+          "ruined alley at night, wet brick",
+          "forest clearing, moon, broken trees",
+          "castle steps, banners tearing",
+        ],
+        rng,
+      )
+    : chase
+      ? pick(["narrow alley, rain", "rooftops at night", "crowded market, spilled stalls"], rng)
+      : horror
+        ? pick(["abandoned hallway, one bulb", "graveyard fog", "locked cellar"], rng)
+        : pick(["rooftop at dusk", "rainy street", "small room, lamp", "school rooftop at night, adults 18+"], rng);
+
+  const setup = B
+    ? `${both}, establishing wide shot, ${place}, they have not hit yet, title energy`
+    : `${both}, establishing shot, ${place}, the scene is about to start`;
+  const approach = B
+    ? `${both}, they close the distance, eyes locked, ${place}`
+    : `${A}, steps forward, ${place}`;
+  const clash = B
+    ? fight
+      ? `${both}, first hit, impact lines, ${place}, close on the clash`
+      : chase
+        ? `${both}, the chase is on, motion lines, ${place}`
+        : `${both}, they meet, ${place}`
+    : `${A}, the action starts, motion lines, ${place}`;
+  const turn = B
+    ? nsfw && fight
+      ? `${both}, ${A} pinned, clothes tearing, ${B} over them, explicit, ${place}`
+      : fight
+        ? `${both}, ${B} lands a heavy blow, ${A} staggered, reaction close-up, ${place}`
+        : `${both}, the turn, shock on the face, ${place}`
+    : nsfw
+      ? `${A}, clothes off, explicit act, uncensored, ${place}`
+      : `${A}, the turn, something goes wrong, ${place}`;
+  const second = B
+    ? `${both}, second clash, dirt and blood, ${place}, low angle`
+    : `${A}, pushes through, ${place}`;
+  const finish = B
+    ? nsfw
+      ? `${both}, last panel, explicit finish, bodies wrecked, uncensored, ${place}, punchline`
+      : fight
+        ? `${both}, last panel, the finishing blow, winner standing, ${place}, punchline`
+        : `${both}, last panel, the beat lands, ${place}, punchline`
+    : nsfw
+      ? `${A}, last panel, explicit, uncensored, after, ${place}`
+      : `${A}, last panel, the moment lands, ${place}, punchline`;
+
+  const pool =
+    n <= 1
+      ? [finish.replace("last panel, ", "splash page, ")]
+      : n === 3
+        ? [setup, clash, finish]
+        : n === 6
+          ? [setup, approach, clash, turn, second, finish]
+          : [setup, clash, turn, finish];
+  while (pool.length < n) pool.push(finish);
+  return pool.slice(0, n);
+}
+
 export function splitComicBeats(script: string, n: number): string[] {
   const raw = (script || "").trim();
   if (n <= 1) return [raw || "one splash of the scene"];
-  const numbered = raw.split(/(?:^|\n)\s*(?:p(?:anel)?\s*\d+\s*[:.\-]|#\s*\d+\s*[:.\-])/i)
+  const numbered = raw
+    .split(/(?:^|\n)\s*(?:p(?:anel)?\s*\d+\s*[:.\-]|#\s*\d+\s*[:.\-])/i)
     .map((s) => s.trim())
     .filter(Boolean);
   if (numbered.length >= 2) {
@@ -109,9 +249,27 @@ export function splitComicBeats(script: string, n: number): string[] {
   return out.slice(0, n);
 }
 
-export function buildComicPrompt(script: string, layoutId: string, inkTags = ""): string {
+export function comicBeats(
+  script: string,
+  n: number,
+  opts?: { nsfw?: boolean; seed?: number },
+): string[] {
+  if (n <= 1) {
+    if (isPanelScript(script)) return splitComicBeats(script, 1);
+    return inventComicBeats(script, 1, opts);
+  }
+  if (isPanelScript(script)) return splitComicBeats(script, n);
+  return inventComicBeats(script, n, opts);
+}
+
+export function buildComicPrompt(
+  script: string,
+  layoutId: string,
+  inkTags = "",
+  opts?: { nsfw?: boolean; seed?: number },
+): string {
   const layout = COMIC_LAYOUTS.find((l) => l.id === layoutId) || COMIC_LAYOUTS[1];
-  const beats = splitComicBeats(script, layout.panels);
+  const beats = comicBeats(script, layout.panels, opts);
   const panels = beats.map((b, i) => `panel ${i + 1}: ${b}`).join(", ");
   return [
     layout.tags,
@@ -122,4 +280,11 @@ export function buildComicPrompt(script: string, layoutId: string, inkTags = "")
   ]
     .filter(Boolean)
     .join(", ");
+}
+
+export function formatComicScript(script: string, layoutId: string, opts?: { nsfw?: boolean; seed?: number }): string {
+  const layout = COMIC_LAYOUTS.find((l) => l.id === layoutId) || COMIC_LAYOUTS[1];
+  return comicBeats(script, layout.panels, opts)
+    .map((b, i) => `P${i + 1}: ${b}`)
+    .join("\n");
 }

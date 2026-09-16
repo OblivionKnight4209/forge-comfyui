@@ -1847,7 +1847,7 @@ describe("live room", () => {
 
 describe("comic page builder", () => {
   it("splits P1/P2 beats", async () => {
-    const { splitComicBeats, buildComicPrompt } = await import("./comic.ts");
+    const { splitComicBeats, buildComicPrompt, inventComicBeats, isPanelScript } = await import("./comic.ts");
     const beats = splitComicBeats("P1: she walks in\nP2: he looks up\nP3: they kiss\nP4: rain", 4);
     assert.equal(beats.length, 4);
     assert.match(beats[0] || "", /walks/i);
@@ -1857,6 +1857,26 @@ describe("comic page builder", () => {
     assert.match(page, /2 by 2|gutters/i);
     assert.match(page, /same characters/i);
     assert.match(page, /not a photograph/i);
+    assert.equal(isPanelScript("P1: hi"), true);
+    assert.equal(isPanelScript("magical girl vs goblin"), false);
+  });
+  it("short line becomes four different scenes", async () => {
+    const { inventComicBeats, buildComicPrompt, formatComicScript } = await import("./comic.ts");
+    const beats = inventComicBeats("magical girl vs goblin", 4, { seed: 7, nsfw: false });
+    assert.equal(beats.length, 4);
+    assert.match(beats[0] || "", /magical girl|twin tail|frilly|wand/i);
+    assert.match(beats.join(" "), /goblin/i);
+    assert.match(beats[1] || "", /clash|hit|meet/i);
+    assert.match(beats[3] || "", /last panel|finishing|punchline/i);
+    const page = buildComicPrompt("magical girl vs goblin", "2x2", "manga ink", { seed: 7 });
+    assert.match(page, /panel 1:/i);
+    assert.match(page, /panel 4:/i);
+    assert.doesNotMatch(page, /same characters, the action continues/i);
+    const script = formatComicScript("cat fight a dog", "2x2", { seed: 3 });
+    assert.match(script, /P1:/);
+    assert.match(script, /P4:/);
+    assert.match(script, /tabby|cat/i);
+    assert.match(script, /dog/i);
   });
 });
 
