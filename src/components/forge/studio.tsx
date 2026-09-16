@@ -640,6 +640,13 @@ export function Studio() {
     }
     if (imgs.length === 1 && vids.length === 0) {
       useForge.getState().setMedia(imgs);
+      if (tab === "video") {
+        useForge.getState().setMode("i2v");
+        setShowSource(true);
+        logForge("info", "Video", "Still is frame 1 — type the motion, Generate");
+        void adoptDroppedStill(imgs[0]!.dataUrl);
+        return;
+      }
       useForge.getState().setMode("i2i");
       useForge.getState().setLiveScan(null);
       const d = useForge.getState().denoise;
@@ -692,6 +699,10 @@ export function Studio() {
       folder: still.folder || "output",
     };
     const st = useForge.getState();
+    if (tab === "video") {
+      loadForVideo(dataUrl, still.name, still.folder);
+      return;
+    }
     const combining = how === "add" || st.mode === "ref2i" || tab === "combine";
     if (combining && how === "add") {
       const n = pushCombinePhoto(item);
@@ -771,7 +782,7 @@ export function Studio() {
     e.stopPropagation();
     const still = readForgeStill(e.dataTransfer);
     if (still) {
-      void placeLibraryStill(still, tab === "combine" || mode === "ref2i" ? "add" : "edit");
+      void placeLibraryStill(still, tab === "combine" || mode === "ref2i" ? "add" : tab === "video" ? "edit" : "edit");
       return;
     }
     if (e.dataTransfer.files.length) void onDropFiles(e.dataTransfer.files);
@@ -799,6 +810,28 @@ export function Studio() {
     setTab("image");
     setZoom(null);
     toast.success("Edit photo — Take out / Put in / Change, then Generate");
+  }
+
+  function loadForVideo(src: string, name: string, folder?: "input" | "output") {
+    let f = folder;
+    let n = name;
+    try {
+      const u = new URL(src, "http://127.0.0.1");
+      n = n || u.searchParams.get("name") || u.searchParams.get("filename") || name;
+      if (u.searchParams.get("folder") === "input" || u.searchParams.get("type") === "input") f = "input";
+      if (u.searchParams.get("folder") === "output" || u.searchParams.get("type") === "output") f = "output";
+    } catch {
+      /* keep */
+    }
+    useForge.getState().setMedia([
+      { id: uid(), kind: "image", name: n, dataUrl: src, folder: f || "output" },
+    ]);
+    useForge.getState().setMode("i2v");
+    useForge.getState().setSoundOn(true);
+    setShowSource(true);
+    setTab("video");
+    setZoom(null);
+    logForge("info", "Video", `${n} is frame 1. Type the motion, then Generate.`);
   }
 
   function clearEdit(kind: "photo" | "words" | "all") {
@@ -1648,7 +1681,11 @@ export function Studio() {
       }
     }
     if (runMeta.needsImage && !inputs.some((m) => m.kind === "image")) {
-      toast.error("No photo on the stage. Drop one, or tap Edit this on a result, then Generate.");
+      toast.error(
+        tab === "video"
+          ? "Need a still for image-to-video. Tap one in Results or Library, then Generate."
+          : "No photo on the stage. Drop one, or tap Edit this on a result, then Generate.",
+      );
       return;
     }
     if (runMode === "ref2i" && inputs.filter((m) => m.kind === "image").length < 2) {
@@ -2074,7 +2111,7 @@ export function Studio() {
     <div className="flex min-h-dvh flex-col bg-bg pb-8 text-fg">
       <header className="flex items-center gap-3 px-4 py-3 md:px-6">
         <p className="text-[15px] font-medium tracking-tight">Forge</p>
-        <span className="text-[11px] tabular-nums text-subtle">188</span>
+        <span className="text-[11px] tabular-nums text-subtle">189</span>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {meta.video ? (
             <select
@@ -2243,23 +2280,31 @@ export function Studio() {
                 setTab(g);
                 const st = useForge.getState();
                 st.setLiveScan(null);
-                st.setActiveJob(null);
                 st.setEditRemove("");
                 st.setEditAdd("");
                 st.setEditChange("");
                 setShowSource(false);
                 setZoom(null);
-                if (g !== "mixes") {
-                  st.setMedia([]);
-                  st.setRefPrompt("");
-                }
-                st.setMode(g === "video" ? "t2v" : "t2i");
-                if (g === "mixes") {
-                  if (!st.seedLocked) st.toggleSeedLock();
-                  const image = (comfy?.checkpoints ?? []).filter(isImageCheckpoint);
-                  setMixPick((prev) => (prev.length ? prev : image));
-                }
                 if (g === "video") {
+                  const img =
+                    st.media.find((m) => m.kind === "image") ||
+                    (active?.resultKind === "image" && active.resultDataUrl
+                      ? {
+                          id: "from-still",
+                          kind: "image" as const,
+                          name: active.resultName || "still.png",
+                          dataUrl: active.resultDataUrl,
+                          folder: active.resultFolder,
+                        }
+                      : null);
+                  if (img) {
+                    st.setMedia([img]);
+                    st.setMode("i2v");
+                    setShowSource(true);
+                  } else {
+                    st.setMedia([]);
+                    st.setMode("t2v");
+                  }
                   st.setDuration(6);
                   st.setSoundOn(true);
                   st.setSettings({
@@ -2268,6 +2313,17 @@ export function Studio() {
                     videoFrames: wanFrameCount(6),
                     videoFps: wanFpsForDuration(6),
                   });
+                  return;
+                }
+                if (g !== "mixes") {
+                  st.setMedia([]);
+                  st.setRefPrompt("");
+                }
+                st.setMode("t2i");
+                if (g === "mixes") {
+                  if (!st.seedLocked) st.toggleSeedLock();
+                  const image = (comfy?.checkpoints ?? []).filter(isImageCheckpoint);
+                  setMixPick((prev) => (prev.length ? prev : image));
                 }
               }}
               className={cn(
@@ -2463,16 +2519,22 @@ export function Studio() {
             className="flex h-[42dvh] w-full flex-col items-center justify-center gap-3 px-6 text-center md:h-[52dvh]"
             onClick={openLibrary}
           >
-            <p className="text-2xl font-medium tracking-tight text-fg">Imagine it</p>
-            <p className="max-w-sm text-sm text-muted">Type below. Or pick a photo from the library to edit.</p>
+            <p className="text-2xl font-medium tracking-tight text-fg">
+              {tab === "video" ? "Animate it" : "Imagine it"}
+            </p>
+            <p className="max-w-sm text-sm text-muted">
+              {tab === "video"
+                ? "Pick a still from the library or Results — that photo is frame 1. Or type below for text-to-video."
+                : "Type below. Or pick a photo from the library to edit."}
+            </p>
             <span className="rounded-full bg-accent px-5 py-2.5 text-sm text-accent-fg">
-              Library or type below
+              {tab === "video" ? "Add a still to animate" : "Library or type below"}
             </span>
           </button>
         )}
         <div className={cn("absolute left-3 top-14 z-[70] w-[7.5rem] space-y-1", tab === "combine" && "hidden")}>
           <p className="text-[10px] uppercase tracking-wide text-muted">
-            {mode === "ref2i" ? "Combine" : "Edit source"}
+            {mode === "ref2i" ? "Combine" : tab === "video" ? "Frame 1" : "Edit source"}
           </p>
           {(mode === "ref2i" ? media.filter((m) => m.kind === "image").slice(0, 5) : media.slice(0, 1)).map((m, i) => (
             <button
@@ -2535,7 +2597,7 @@ export function Studio() {
             title="Drop a library still here to add it"
           >
             <ImagePlus className="size-4" />
-            {mode === "ref2i" ? "Add ref" : "Add photo"}
+            {mode === "ref2i" ? "Add ref" : tab === "video" ? "Add still" : "Add photo"}
           </button>
           {sourceSrc && mode !== "ref2i" ? (
             <Button size="sm" variant="secondary" className="w-full" onClick={() => void deleteThisStill(sourceSrc)}>
@@ -2706,6 +2768,10 @@ export function Studio() {
                     void placeLibraryStill({ src, name: f.name, folder: f.folder }, "add");
                     return;
                   }
+                  if (!vid && tab === "video") {
+                    loadForVideo(src, f.name, f.folder);
+                    return;
+                  }
                   setZoom({ src, kind: vid ? "video" : "image", name: f.name });
                   if (!vid) void adoptDroppedStill(src);
                 }}
@@ -2735,6 +2801,10 @@ export function Studio() {
                       { src: job.resultDataUrl, name: job.resultName || `seed ${job.seed}`, folder: job.resultFolder },
                       "add",
                     );
+                    return;
+                  }
+                  if (job.resultKind !== "video" && tab === "video") {
+                    loadForVideo(job.resultDataUrl, job.resultName || `seed ${job.seed}`, job.resultFolder);
                     return;
                   }
                   adoptJob(job);
@@ -3745,7 +3815,9 @@ export function Studio() {
             <p className="text-sm text-muted">
               {tab === "combine" || mode === "ref2i"
                 ? "Tap a still to add it to Combine. Need 2 to 5. Drag still works too."
-                : "Tap a still to edit it. Drag onto Add photo if you prefer."}
+                : tab === "video"
+                  ? "Tap a still to animate it. That photo becomes frame 1."
+                  : "Tap a still to edit it. Drag onto Add photo if you prefer."}
             </p>
             {(["output", "input"] as const).map((folder) => (
               <div key={folder}>
@@ -3763,6 +3835,11 @@ export function Studio() {
                           onClick={() => {
                             if (tab === "combine" || mode === "ref2i") {
                               void placeLibraryStill({ src, name: f.name, folder }, "add");
+                              return;
+                            }
+                            if (tab === "video") {
+                              loadForVideo(src, f.name, folder);
+                              setSheet(null);
                               return;
                             }
                             void loadForEdit(src, f.name, f.folder);
@@ -3936,6 +4013,18 @@ export function Studio() {
             >
               Edit this
             </Button>
+            {zoom.kind !== "video" ? (
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => {
+                  loadForVideo(zoom.src, zoom.name || "still.png", "output");
+                  setZoom(null);
+                }}
+              >
+                Animate
+              </Button>
+            ) : null}
             <Button size="sm" variant="secondary" onClick={() => void deleteThisStill(zoom.src)}>
               <Trash2 />
               Shred
