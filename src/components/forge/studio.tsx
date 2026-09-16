@@ -36,7 +36,7 @@ import { QrMark } from "@/components/forge/qr-mark";
 import { browserPoll, browserQueue, browserTag, lanProbe, lanQueue, lanGenerate, lanBrain, lanBrainStatus, asDataUrl } from "@/lib/forge/comfy-browser";
 import { addClipSound, fetchLive, fetchRecent, forgetForgeOnThisDevice, isLanRemote, mergeLiveJobs, pushLive } from "@/lib/forge/live-room";
 import { lanInfoFn, pollComfyFn, probeComfyFn, queueComfyFn, expandDiskWildcardsFn, peekWildcardFn, tagWithWd14Fn, listWorkflowsFn, queueSavedWorkflowFn, probeOllamaFn, writeLlmIdeasFn, listComfyRecentFn, shredComfyFn, comfyMediaFn, writeStoryFn, appendPromptFn, listPromptsFn } from "@/lib/forge/functions";
-import { extractFrame, scanFromTags } from "@/lib/forge/detector";
+import { extractFrame, scanFromTags, scanMedia, mergeScan } from "@/lib/forge/detector";
 import { downloadBlob, embedWorkflowPng, dataUrlToBytes, readPngText, seedFromPngText, seedFromBytes } from "@/lib/forge/png";
 import { useForge } from "@/lib/forge/store";
 import {
@@ -1272,24 +1272,44 @@ export function Studio() {
   }
 
   async function runWd14Scan(dataUrl: string) {
+    let pixels = dataUrl;
     try {
-      const viaProxy = await browserTag(dataUrl);
+      pixels = await asDataUrl(dataUrl);
+    } catch {
+      /* use the url as-is */
+    }
+    let local: ReturnType<typeof scanFromTags> | null = null;
+    try {
+      const frame = await extractFrame(pixels);
+      local = await scanMedia(frame);
+    } catch {
+      try {
+        local = await scanMedia(pixels);
+      } catch {
+        local = null;
+      }
+    }
+    try {
+      const viaProxy = await browserTag(pixels.startsWith("data:") ? pixels : dataUrl);
       if ("tags" in viaProxy && viaProxy.tags) {
         logForge("info", "Scan", viaProxy.tags.slice(0, 400));
-        toast.success("WD14 tagged");
-        return scanFromTags(viaProxy.tags);
+        useForge.getState().setShowBoxes(true);
+        return mergeScan(scanFromTags(viaProxy.tags), local);
       }
       const r = await tagWithWd14Fn({
-        data: { baseUrl: useForge.getState().settings.baseUrl, dataUrl },
+        data: { baseUrl: useForge.getState().settings.baseUrl, dataUrl: pixels.startsWith("data:") ? pixels : dataUrl },
       });
       if ("tags" in r && r.tags) {
         logForge("info", "Scan", r.tags.slice(0, 400));
-        toast.success("WD14 tagged");
-        return scanFromTags(r.tags);
+        useForge.getState().setShowBoxes(true);
+        return mergeScan(scanFromTags(r.tags), local);
       }
       if ("error" in r && r.error) {
         logForge("error", "Scan", r.error);
-        toast.error(r.error.slice(0, 160));
+        if (local?.boxes.length) {
+          useForge.getState().setShowBoxes(true);
+          return { ...local, notes: [...(local.notes || []), r.error.slice(0, 160)] };
+        }
         return {
           summary: r.error,
           tags: [],
@@ -1302,7 +1322,14 @@ export function Studio() {
     } catch (err) {
       const message = err instanceof Error ? err.message : "Scan failed";
       logForge("error", "Scan", message);
-      toast.error(message);
+      if (local?.boxes.length) {
+        useForge.getState().setShowBoxes(true);
+        return local;
+      }
+    }
+    if (local) {
+      useForge.getState().setShowBoxes(true);
+      return local;
     }
     return {
       summary: "WD14 did not answer. Open Errors tab.",
@@ -2047,7 +2074,7 @@ export function Studio() {
     <div className="flex min-h-dvh flex-col bg-bg pb-8 text-fg">
       <header className="flex items-center gap-3 px-4 py-3 md:px-6">
         <p className="text-[15px] font-medium tracking-tight">Forge</p>
-        <span className="text-[11px] tabular-nums text-subtle">187</span>
+        <span className="text-[11px] tabular-nums text-subtle">188</span>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {meta.video ? (
             <select
@@ -2352,40 +2379,23 @@ export function Studio() {
           stageKind === "video" ? (
             <ForgeClip src={stageSrc} controls autoPlay className="forge-still mx-auto size-full max-h-[70dvh] object-contain md:max-h-[72dvh]" />
           ) : (
-            <div className="relative mx-auto flex size-full max-h-[70dvh] items-center justify-center p-3 md:max-h-[72dvh]">
-              <img
-                src={stageSrc}
-                alt=""
-                className="forge-still mx-auto max-h-[66dvh] w-auto max-w-full cursor-zoom-in object-contain md:max-h-[70dvh]"
-                onClick={() => setZoom({ src: stageSrc, kind: "image" })}
-                onError={(e) => {
-                  const el = e.currentTarget;
-                  if (el.dataset.fallback) return;
-                  el.dataset.fallback = "1";
-                  const name = el.src.split("name=")[1]?.split("&")[0];
-                  if (name) el.src = `/comfy-proxy/view?filename=${decodeURIComponent(name)}&type=output`;
-                }}
-              />
-              {showBoxes && scan && (
-                <div className="pointer-events-none absolute inset-0">
-                  {scan.boxes.map((b) => (
-                    <div
-                      key={b.id}
-                      className="absolute border border-signal"
-                      style={{
-                        left: `${b.x * 100}%`,
-                        top: `${b.y * 100}%`,
-                        width: `${b.w * 100}%`,
-                        height: `${b.h * 100}%`,
-                      }}
-                    >
-                      <span className="absolute -top-5 left-0 bg-signal px-1 text-[10px] text-signal-fg">
-                        {b.label} {pct(b.confidence)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
+            <div className="relative mx-auto inline-flex max-h-[70dvh] max-w-full items-center justify-center p-3 md:max-h-[72dvh]">
+              <div className="relative inline-block max-h-[66dvh] max-w-full">
+                <img
+                  src={stageSrc}
+                  alt=""
+                  className="forge-still max-h-[66dvh] w-auto max-w-full cursor-zoom-in object-contain md:max-h-[70dvh]"
+                  onClick={() => setZoom({ src: stageSrc, kind: "image" })}
+                  onError={(e) => {
+                    const el = e.currentTarget;
+                    if (el.dataset.fallback) return;
+                    el.dataset.fallback = "1";
+                    const name = el.src.split("name=")[1]?.split("&")[0];
+                    if (name) el.src = `/comfy-proxy/view?filename=${decodeURIComponent(name)}&type=output`;
+                  }}
+                />
+                <ScanBoxes boxes={scan?.boxes ?? []} show={showBoxes} />
+              </div>
             </div>
           )
         ) : tab === "combine" ? (
@@ -3825,6 +3835,7 @@ export function Studio() {
         <SheetContent title="Scan" side="bottom">
           <DetectorCard
             scan={scan}
+            src={stageSrc}
             showBoxes={showBoxes}
             onToggleBoxes={(v) => useForge.getState().setShowBoxes(v)}
             onScan={() => {
@@ -3941,7 +3952,10 @@ export function Studio() {
                 className="max-h-[88dvh] max-w-[96vw] object-contain"
               />
             ) : (
-              <img src={zoom.src} alt="" className="max-h-[88dvh] max-w-[96vw] object-contain" />
+              <span className="relative inline-block max-h-[88dvh] max-w-[96vw]">
+                <img src={zoom.src} alt="" className="max-h-[88dvh] max-w-[96vw] object-contain" />
+                <ScanBoxes boxes={scan?.boxes ?? []} show={showBoxes} />
+              </span>
             )}
           </button>
         </div>
@@ -4579,8 +4593,44 @@ function GraphCard({
   );
 }
 
+function ScanBoxes({
+  boxes,
+  show,
+}: {
+  boxes: { id: string; label: string; confidence: number; x: number; y: number; w: number; h: number }[];
+  show: boolean;
+}) {
+  if (!show || !boxes.length) return null;
+  return (
+    <div className="pointer-events-none absolute inset-0">
+      {boxes.map((b) => (
+        <div
+          key={b.id}
+          className="absolute border-2 border-signal"
+          style={{
+            left: `${Math.max(0, Math.min(1, b.x)) * 100}%`,
+            top: `${Math.max(0, Math.min(1, b.y)) * 100}%`,
+            width: `${Math.max(0.04, Math.min(1, b.w)) * 100}%`,
+            height: `${Math.max(0.04, Math.min(1, b.h)) * 100}%`,
+          }}
+        >
+          <span
+            className={cn(
+              "absolute left-0 whitespace-nowrap bg-signal px-1 text-[10px] font-medium text-black",
+              b.y < 0.08 ? "top-0" : "-top-5",
+            )}
+          >
+            {b.label} {pct(b.confidence)}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function DetectorCard({
   scan,
+  src,
   showBoxes,
   onToggleBoxes,
   onScan,
@@ -4588,6 +4638,7 @@ function DetectorCard({
   onUseTags,
 }: {
   scan: Job["scan"] | null;
+  src?: string;
   showBoxes: boolean;
   onToggleBoxes: (v: boolean) => void;
   onScan: () => void;
@@ -4600,9 +4651,22 @@ function DetectorCard({
         <ScanSearch />
         Scan
       </Button>
+      {src ? (
+        <div className="relative mx-auto inline-block max-h-56 max-w-full overflow-hidden rounded-lg bg-raised">
+          <img src={src} alt="" className="max-h-56 w-auto max-w-full object-contain" />
+          <ScanBoxes boxes={scan?.boxes ?? []} show={showBoxes} />
+        </div>
+      ) : null}
       {scan ? (
         <>
           <p className="text-sm leading-relaxed">{scan.summary}</p>
+          {scan.boxes.length ? (
+            <p className="text-xs text-muted">
+              {scan.boxes.length} box{scan.boxes.length === 1 ? "" : "es"} on the still. Toggle Boxes if you do not see the green frames.
+            </p>
+          ) : (
+            <p className="text-xs text-warn">No boxes yet. Tap Scan with a still on stage.</p>
+          )}
           <div className="flex flex-wrap gap-1.5">
             {scan.tags.map((t) => (
               <Badge key={t.tag}>

@@ -69,7 +69,7 @@ function loadElement(src: string): Promise<HTMLImageElement | HTMLVideoElement> 
   }
   return new Promise((resolve, reject) => {
     const img = new Image();
-    img.crossOrigin = "anonymous";
+    img.crossOrigin = src.startsWith("data:") || src.startsWith("blob:") ? null : "anonymous";
     img.onload = () => resolve(img);
     img.onerror = () => reject(new Error("Could not read image"));
     img.src = src;
@@ -298,9 +298,56 @@ export function scanFromTags(raw: string): ScanResult {
   return {
     summary,
     tags,
-    boxes: [],
+    boxes: boxesFromTags(tags),
     palette: [],
     notes: ["ComfyUI-WD14-Tagger — local, not a cloud model."],
+    scannedAt: Date.now(),
+  };
+}
+
+/** Fallback boxes from tags so the overlay is never empty after a WD14 hit. */
+export function boxesFromTags(tags: { tag: string }[]): DetectedBox[] {
+  const blob = tags.map((t) => t.tag.toLowerCase()).join(" ");
+  const boxes: DetectedBox[] = [];
+  const person = /\b(1girl|2girls|1boy|2boys|girl|woman|man|person|solo|people)\b/.test(blob);
+  const face = /\b(face|portrait|close.?up|looking at viewer)\b/.test(blob);
+  const two = /\b(2girls|2boys|couple|multiple)\b/.test(blob);
+  if (two) {
+    boxes.push({ id: "left", label: "subject", confidence: 0.62, x: 0.04, y: 0.08, w: 0.44, h: 0.86 });
+    boxes.push({ id: "right", label: "subject", confidence: 0.62, x: 0.52, y: 0.08, w: 0.44, h: 0.86 });
+  } else if (person) {
+    boxes.push({ id: "subject", label: "subject", confidence: 0.7, x: 0.16, y: 0.06, w: 0.68, h: 0.9 });
+  }
+  if (face) {
+    boxes.push({ id: "face", label: "face", confidence: 0.66, x: 0.32, y: 0.05, w: 0.36, h: 0.34 });
+  }
+  if (/\b(pussy|penis|breasts|nipples|nude|naked)\b/.test(blob) && !boxes.some((b) => b.id === "body")) {
+    boxes.push({ id: "body", label: "body", confidence: 0.58, x: 0.22, y: 0.28, w: 0.56, h: 0.62 });
+  }
+  if (!boxes.length) {
+    boxes.push({ id: "frame", label: "frame", confidence: 0.4, x: 0.06, y: 0.06, w: 0.88, h: 0.88 });
+  }
+  return boxes.slice(0, 8);
+}
+
+export function mergeScan(wd14: ScanResult, local: ScanResult | null): ScanResult {
+  if (!local) {
+    return { ...wd14, boxes: wd14.boxes.length ? wd14.boxes : boxesFromTags(wd14.tags) };
+  }
+  const seen = new Set<string>();
+  const tags: { tag: string; confidence: number }[] = [];
+  for (const t of [...wd14.tags, ...local.tags]) {
+    const k = t.tag.toLowerCase();
+    if (seen.has(k)) continue;
+    seen.add(k);
+    tags.push(t);
+  }
+  return {
+    summary: wd14.tags.length ? wd14.summary : local.summary,
+    tags: tags.sort((a, b) => b.confidence - a.confidence).slice(0, 40),
+    boxes: local.boxes.length ? local.boxes : wd14.boxes.length ? wd14.boxes : boxesFromTags(tags),
+    palette: local.palette.length ? local.palette : wd14.palette,
+    notes: [...new Set([...(wd14.notes || []), ...(local.notes || [])])],
     scannedAt: Date.now(),
   };
 }

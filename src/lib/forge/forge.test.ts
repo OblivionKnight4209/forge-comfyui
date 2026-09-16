@@ -54,7 +54,7 @@ import { applyArtWrap, applyQualityOffers, qualityWantsHires, randomSceneLine, L
 import { pickBrainModel, cleanBrainOut, brainSystem } from "./brain.ts";
 import { designClipAudio, ensureVoice } from "./clip-sound.ts";
 import { embedWorkflowPng, readPngText, seedFromPngText, seedFromBytes } from "./png.ts";
-import { scanFromTags } from "./detector.ts";
+import { scanFromTags, boxesFromTags, mergeScan } from "./detector.ts";
 import { buildEditPrompt, composeI2iPrompt, expandEditFields } from "./edit-prompt.ts";
 import type { ComfySettings, LoraEntry, Mode } from "./types.ts";
 
@@ -1450,6 +1450,26 @@ describe("detector tags", () => {
     const s = scanFromTags("1girl, solo, long hair");
     assert.equal(s.tags.length, 3);
     assert.match(s.summary, /WD14/);
+    assert.ok(s.boxes.length >= 1);
+  });
+  it("1girl tags get a subject box", () => {
+    const boxes = boxesFromTags([{ tag: "1girl" }, { tag: "solo" }, { tag: "face" }]);
+    assert.ok(boxes.some((b) => b.label === "subject"));
+    assert.ok(boxes.some((b) => b.label === "face"));
+    assert.ok(boxes.every((b) => b.w > 0 && b.h > 0));
+  });
+  it("mergeScan keeps WD14 tags and local boxes", () => {
+    const wd = scanFromTags("1girl, red hair");
+    const local = {
+      ...wd,
+      tags: [{ tag: "person", confidence: 0.8 }],
+      boxes: [{ id: "p", label: "person", confidence: 0.9, x: 0.1, y: 0.1, w: 0.4, h: 0.7 }],
+      palette: ["red"],
+    };
+    const m = mergeScan(wd, local);
+    assert.ok(m.tags.some((t) => t.tag === "1girl"));
+    assert.equal(m.boxes[0]?.label, "person");
+    assert.equal(m.palette[0], "red");
   });
 });
 
