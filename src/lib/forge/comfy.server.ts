@@ -1120,7 +1120,7 @@ export function addSoundToClip(name: string, spoken: string): { name: string } |
     plan.lines.forEach((line, i) => {
       const tmp = path.join(os.tmpdir(), `forge-voice-${Date.now()}-${i}.wav`);
       const v = espeakVoice(line.voice);
-      spawnSync(voiceBin, ["-v", v.v, "-s", v.s, "-p", v.p, "-w", tmp, line.text], { timeout: 15000 });
+      spawnSync(voiceBin, ["-v", v.v, "-s", v.s, "-p", v.p, "-g", "4", "-w", tmp, line.text], { timeout: 15000 });
       try {
         if (fs.existsSync(tmp) && fs.statSync(tmp).size > 400) wavs.push(tmp);
       } catch {
@@ -1128,7 +1128,7 @@ export function addSoundToClip(name: string, spoken: string): { name: string } |
       }
     });
   }
-  const bed = ffmpegBed(plan.sfx);
+  const bed = ffmpegBed([plan.sfx, ...(plan.extra || [])]);
   const inputs = ["-y", "-i", src];
   wavs.forEach((w) => inputs.push("-i", w));
   const delays = [400, 1800, 3200];
@@ -1165,6 +1165,62 @@ export function addSoundToClip(name: string, spoken: string): { name: string } |
   if (r.status !== 0 || !fs.existsSync(dest)) {
     const hint = voiceBin ? "" : " Voices skipped — also install espeak-ng.";
     return { error: ((r.stderr || r.stdout || "ffmpeg sound failed").slice(-360) + hint).trim() };
+  }
+  return { name: outName };
+}
+
+export function lastFrameOfClip(name: string): { name: string; dataUrl: string } | { error: string } {
+  const src = latestForgeClip(name);
+  if (!src) return { error: `clip not on disk (${name || "Forge*.mp4"})` };
+  const ffmpeg = whichBin("ffmpeg");
+  if (!ffmpeg) return { error: "Need ffmpeg to grab the last frame. sudo apt install -y ffmpeg" };
+  const outName = path.basename(src).replace(/\.[a-z0-9]+$/i, "_last.png");
+  const dest = path.join(path.dirname(src), outName);
+  const r = spawnSync(ffmpeg, ["-y", "-sseof", "-0.08", "-i", src, "-frames:v", "1", dest], {
+    encoding: "utf8",
+    timeout: 20000,
+  });
+  if (r.status !== 0 || !fs.existsSync(dest)) {
+    return { error: (r.stderr || "last frame failed").slice(-240) };
+  }
+  const buf = fs.readFileSync(dest);
+  return { name: outName, dataUrl: `data:image/png;base64,${buf.toString("base64")}` };
+}
+
+export function concatClips(names: string[]): { name: string } | { error: string } {
+  const files = names.map((n) => latestForgeClip(n)).filter((p): p is string => Boolean(p));
+  if (files.length < 2) return { error: "Need two clips to stitch" };
+  const ffmpeg = whichBin("ffmpeg");
+  if (!ffmpeg) return { error: "Need ffmpeg to stitch clips. sudo apt install -y ffmpeg" };
+  const dir = path.dirname(files[0]!);
+  const listPath = path.join(os.tmpdir(), `forge-concat-${Date.now()}.txt`);
+  const outName = `Forge_extend_${Date.now().toString(36)}.mp4`;
+  const dest = path.join(dir, outName);
+  fs.writeFileSync(listPath, files.map((f) => `file '${f.replace(/'/g, "'\\''")}'`).join("\n"));
+  let r = spawnSync(
+    ffmpeg,
+    ["-y", "-f", "concat", "-safe", "0", "-i", listPath, "-c", "copy", dest],
+    { encoding: "utf8", timeout: 60000 },
+  );
+  if (r.status !== 0 || !fs.existsSync(dest)) {
+    try {
+      if (fs.existsSync(dest)) fs.unlinkSync(dest);
+    } catch {
+      /* ignore */
+    }
+    r = spawnSync(
+      ffmpeg,
+      ["-y", "-f", "concat", "-safe", "0", "-i", listPath, "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", dest],
+      { encoding: "utf8", timeout: 120000 },
+    );
+  }
+  try {
+    fs.unlinkSync(listPath);
+  } catch {
+    /* ignore */
+  }
+  if (r.status !== 0 || !fs.existsSync(dest)) {
+    return { error: (r.stderr || "concat failed").slice(-280) };
   }
   return { name: outName };
 }

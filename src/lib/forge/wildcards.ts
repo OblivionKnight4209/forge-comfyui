@@ -1329,13 +1329,17 @@ export function writePrompt(opts: {
 }
 
 /** Grok clip: i2v locks the still; t2v invents motion. */
-export function grokMotion(typed: string, kind: "still-lock" | "invent" = "invent"): string {
+export function grokMotion(typed: string, kind: "still-lock" | "invent" | "continue" = "invent"): string {
   const lead = userLead(recoverScene(typed) || typed || "")
     .replace(/\s+/g, " ")
     .trim();
   if (kind === "still-lock") {
     const core = lead || "the same people";
     return `${core}, same face, same body, same clothes, same hair, subtle motion only, breathing, hair drift, cloth shift, sharp focus, no morph, no warp`;
+  }
+  if (kind === "continue") {
+    const core = lead || "the same people";
+    return `${core}, next moment, they keep going, continue the motion, same face, same body, same clothes, same hair, camera holds, sharp focus, no morph`;
   }
   if (!lead) return "slow camera push in, natural motion, hair and cloth move";
   const moving =

@@ -210,6 +210,8 @@ export type Job = {
   progress?: number;
   log?: string;
   vote?: "up" | "down";
+  chainOf?: string[];
+  chainLeft?: number;
 };
 
 export type Aspect = "1:1" | "16:9" | "9:16" | "3:2" | "2:3" | "4:3" | "3:4" | "21:9";
@@ -419,6 +421,12 @@ export function wanFrameCount(seconds: number, fps = 16) {
   void seconds;
   void fps;
   return 81;
+}
+
+export function videoSegments(seconds: number) {
+  if (seconds >= 15) return 3;
+  if (seconds >= 10) return 2;
+  return 1;
 }
 
 export function wanFpsForDuration(seconds: number) {

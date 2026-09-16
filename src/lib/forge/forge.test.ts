@@ -25,6 +25,7 @@ import {
   pickPlayUnet,
   pickT2vUnet,
   wanFrameCount,
+  videoSegments,
   pairWanUnets,
   isHighNoiseUnet,
   isLowNoiseUnet,
@@ -137,6 +138,9 @@ describe("i2i graph", () => {
   it("6s stays at 81 frames so WAN does not smear", () => {
     assert.equal(wanFrameCount(6, 16), 81);
     assert.equal(wanFrameCount(10, 16), 81);
+    assert.equal(videoSegments(6), 1);
+    assert.equal(videoSegments(10), 2);
+    assert.equal(videoSegments(15), 3);
     const g = graph({
       mode: "t2v",
       settings: settings({ videoFrames: wanFrameCount(6, 16), videoFps: 14, wanUnet: "wan2.2_ti2v_5B_fp16.safetensors", wanVae: "wan2.2_vae.safetensors", wanClip: "umt5.safetensors" }),
@@ -471,6 +475,11 @@ describe("writer", () => {
     assert.match(m, /girl and a dude/);
     assert.doesNotMatch(m, /she moves/);
   });
+  it("continue motion keeps identity and asks for the next beat", () => {
+    const m = grokMotion("a girl and a dude in the rain", "continue");
+    assert.match(m, /next moment|keep going|continue/i);
+    assert.match(m, /same face/);
+  });
   it("clip audio picks fight sfx and two voices", () => {
     const a = designClipAudio("a girl and a dude fight in the alley");
     assert.equal(a.sfx, "fight");
@@ -480,7 +489,13 @@ describe("writer", () => {
   it("clip audio always has a spoken line", () => {
     const a = ensureVoice(designClipAudio("a quiet room with a lamp"), "a quiet room with a lamp");
     assert.ok(a.lines.length >= 1);
-    assert.match(a.lines[0]?.text || "", /quiet|room|lamp|yeah/i);
+    assert.match(a.lines[0]?.text || "", /quiet|room|lamp|yeah|okay|mm|here|alright/i);
+  });
+  it("sex scene gets sex bed plus extra rain if raining", () => {
+    const a = designClipAudio("a girl and a dude fuck in the rain");
+    assert.equal(a.sfx, "sex");
+    assert.ok(a.extra.includes("rain"));
+    assert.ok(a.lines.some((l) => l.voice === "female"));
   });
   it("horror and sex packs are not SFW-washed", () => {
     const h = writeHorrorSet("her", 3).join(" ");

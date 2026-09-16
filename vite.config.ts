@@ -214,7 +214,9 @@ function forgeMediaPlugin(): Plugin {
           pathOnly === "/forge-api/history" ||
           pathOnly === "/forge-api/live" ||
           pathOnly === "/forge-api/recent" ||
-          pathOnly === "/forge-api/sound"
+          pathOnly === "/forge-api/sound" ||
+          pathOnly === "/forge-api/last-frame" ||
+          pathOnly === "/forge-api/concat"
         ) {
           cors();
           if ((req.method ?? "GET").toUpperCase() === "OPTIONS") {
@@ -239,6 +241,8 @@ function forgeMediaPlugin(): Plugin {
               ) => Promise<{ mime: string; dataUrl: string }>;
               listComfyRecent: (opts?: { all?: boolean }) => { folder: "input" | "output"; name: string; mtime: number }[];
               addSoundToClip: (name: string, spoken: string) => { name: string } | { error: string };
+              lastFrameOfClip: (name: string) => { name: string; dataUrl: string } | { error: string };
+              concatClips: (names: string[]) => { name: string } | { error: string };
             };
             const base = "http://127.0.0.1:8188";
             if (pathOnly === "/forge-api/live") {
@@ -272,6 +276,32 @@ function forgeMediaPlugin(): Plugin {
               }
               const body = JSON.parse(await readReqBody(req)) as { name?: string; text?: string };
               const result = mod.addSoundToClip(body.name || "", body.text || "");
+              res.statusCode = 200;
+              res.setHeader("content-type", "application/json");
+              res.end(JSON.stringify(result));
+              return;
+            }
+            if (pathOnly === "/forge-api/last-frame") {
+              if ((req.method ?? "GET").toUpperCase() !== "POST") {
+                res.statusCode = 405;
+                res.end("POST only");
+                return;
+              }
+              const body = JSON.parse(await readReqBody(req)) as { name?: string };
+              const result = mod.lastFrameOfClip(body.name || "");
+              res.statusCode = 200;
+              res.setHeader("content-type", "application/json");
+              res.end(JSON.stringify(result));
+              return;
+            }
+            if (pathOnly === "/forge-api/concat") {
+              if ((req.method ?? "GET").toUpperCase() !== "POST") {
+                res.statusCode = 405;
+                res.end("POST only");
+                return;
+              }
+              const body = JSON.parse(await readReqBody(req)) as { names?: string[] };
+              const result = mod.concatClips(Array.isArray(body.names) ? body.names : []);
               res.statusCode = 200;
               res.setHeader("content-type", "application/json");
               res.end(JSON.stringify(result));

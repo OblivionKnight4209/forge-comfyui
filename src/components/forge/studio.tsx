@@ -38,7 +38,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/input";
 import { QrMark } from "@/components/forge/qr-mark";
 import { browserPoll, browserQueue, browserTag, lanProbe, lanQueue, lanGenerate, lanBrain, lanBrainStatus, asDataUrl } from "@/lib/forge/comfy-browser";
-import { addClipSound, fetchLive, fetchRecent, forgetForgeOnThisDevice, isLanRemote, mergeLiveJobs, pushLive } from "@/lib/forge/live-room";
+import { addClipSound, concatClips, fetchLive, fetchRecent, forgetForgeOnThisDevice, isLanRemote, lastFrameOf, mergeLiveJobs, pushLive } from "@/lib/forge/live-room";
 import { lanInfoFn, pollComfyFn, probeComfyFn, queueComfyFn, expandDiskWildcardsFn, peekWildcardFn, tagWithWd14Fn, listWorkflowsFn, queueSavedWorkflowFn, probeOllamaFn, writeLlmIdeasFn, listComfyRecentFn, shredComfyFn, comfyMediaFn, writeStoryFn, appendPromptFn, listPromptsFn, loadTasteFn, voteTasteFn, resetTasteFn } from "@/lib/forge/functions";
 import { extraNegFromTaste, emptyTaste, loraScore, sortCkptsByTaste, tasteLabel, tasteSummary, warnForCheckpoint, type TasteBook, type TasteReason } from "@/lib/forge/taste";
 import { extractFrame, scanFromTags, scanMedia, mergeScan } from "@/lib/forge/detector";
@@ -67,6 +67,7 @@ import {
   pickT2vUnet,
   pairWanUnets,
   wanFrameCount,
+  videoSegments,
   wanFpsForDuration,
   isRealCheckpoint,
   isImageCheckpoint,
@@ -195,6 +196,8 @@ export function Studio() {
   const [mixJobIds, setMixJobIds] = useState<string[]>([]);
   const [mixQ, setMixQ] = useState("");
   const skipIdeaRefresh = useRef(false);
+  const generateRef = useRef<(opts?: { checkpoint?: string; keepSeed?: boolean; quiet?: boolean; continueVideo?: string; chainOf?: string[]; chainLeft?: number }) => Promise<void>>(async () => {});
+  const chainBusy = useRef(false);
   const genLock = useRef(0);
   const lastComfyOk = useRef<boolean | null>(null);
   const [chipTab, setChipTab] = useState<"write" | "types" | "wild">("write");
@@ -510,6 +513,43 @@ export function Studio() {
           let resultDataUrl = shown;
           const isVid =
             r.kind === "video" || /\.(mp4|webm|mov|m4v)$/i.test(resultName || "");
+          const clips = [...(job.chainOf || []), resultName].filter(Boolean) as string[];
+          const left = job.chainLeft || 0;
+          if (isVid && left > 0 && resultName && !chainBusy.current) {
+            chainBusy.current = true;
+            useForge.getState().patchJob(job.id, {
+              status: "queued",
+              progress: 8,
+              log: `Extend ${clips.length + 1}…`,
+              chainOf: clips,
+              chainLeft: 0,
+              resultName,
+              resultKind: "video",
+            });
+            const frame = await lastFrameOf(resultName);
+            chainBusy.current = false;
+            if (frame.dataUrl) {
+              logForge("info", "Video", `Last frame → next ${left} clip${left > 1 ? "s" : ""}`);
+              void generateRef.current({
+                continueVideo: frame.dataUrl,
+                chainOf: clips,
+                chainLeft: left - 1,
+                quiet: true,
+              });
+              continue;
+            }
+            logForge("warn", "Video", frame.error || "Could not grab last frame — tap Extend");
+          }
+          if (isVid && clips.length > 1) {
+            const joined = await concatClips(clips);
+            if (joined.name) {
+              resultName = joined.name;
+              resultDataUrl = `/forge-media?folder=output&name=${encodeURIComponent(joined.name)}`;
+              logForge("info", "Video", `Stitched ${clips.length} clips`);
+            } else if (joined.error) {
+              logForge("warn", "Video", joined.error);
+            }
+          }
           const wantSound = useForge.getState().soundOn && isVid;
           if (wantSound) {
             let sounded = await addClipSound(resultName || "", job.expandedPrompt || job.prompt);
@@ -1020,6 +1060,27 @@ export function Studio() {
       toast.success("Continue — next beat from this still");
       void generate();
     })();
+  }
+
+  async function continueThisClip(fromName?: string) {
+    const name = fromName || active?.resultName || "";
+    const vid = stageKind === "video" || /\.(mp4|webm|mov|m4v)$/i.test(name);
+    if (!vid) {
+      logForge("warn", "Video", "Make a clip first, then Extend");
+      return;
+    }
+    const frame = await lastFrameOf(name);
+    if (!frame.dataUrl) {
+      logForge("warn", "Video", frame.error || "Could not grab the last frame");
+      return;
+    }
+    logForge("info", "Video", "Extend — last frame is the new start");
+    setTab("video");
+    await generate({
+      continueVideo: frame.dataUrl,
+      chainOf: name ? [name] : [],
+      chainLeft: 0,
+    });
   }
 
   function lockThisSeed(n: number, note: string) {
@@ -1534,7 +1595,14 @@ export function Studio() {
     }
   }
 
-  async function generateOnPc(opts?: { checkpoint?: string; keepSeed?: boolean; quiet?: boolean }) {
+  async function generateOnPc(opts?: {
+    checkpoint?: string;
+    keepSeed?: boolean;
+    quiet?: boolean;
+    continueVideo?: string;
+    chainOf?: string[];
+    chainLeft?: number;
+  }) {
     const state = useForge.getState();
     const photoOn = state.media.some((m) => m.kind === "image");
     const runMode: typeof state.mode =
@@ -1647,6 +1715,10 @@ export function Studio() {
         checkpoint: r.checkpoint || state.settings.checkpoint,
         progress: 12,
         log: "queued on ComfyUI from phone/laptop",
+        chainOf: opts?.chainOf,
+        chainLeft:
+          opts?.chainLeft ??
+          (MODE_META[runMode].video ? Math.max(0, videoSegments(state.duration) - 1) : 0),
       };
       useForge.getState().addJob(job);
       void pushLive(job);
@@ -1667,7 +1739,26 @@ export function Studio() {
     }
   }
 
-  async function generate(opts?: { checkpoint?: string; keepSeed?: boolean; quiet?: boolean }) {
+  async function generate(opts?: {
+    checkpoint?: string;
+    keepSeed?: boolean;
+    quiet?: boolean;
+    continueVideo?: string;
+    chainOf?: string[];
+    chainLeft?: number;
+  }) {
+    if (opts?.continueVideo) {
+      useForge.getState().clearMedia();
+      useForge.getState().addMedia([
+        { id: uid(), kind: "image", name: "extend.png", dataUrl: opts.continueVideo },
+      ]);
+      useForge.getState().setMode("i2v");
+      setTab("video");
+      const cur = useForge.getState().prompt.trim();
+      if (cur && !/\b(next moment|continue the motion|they keep going)\b/i.test(cur)) {
+        useForge.getState().setPrompt(`${cur}, next moment, they keep going, continue the motion, same people`);
+      }
+    }
     if (isLanRemote()) {
       await generateOnPc(opts);
       return;
@@ -1684,7 +1775,7 @@ export function Studio() {
     }
     const state = useForge.getState();
     const photoOn = state.media.some((m) => m.kind === "image");
-    if (tab === "video") {
+    if (tab === "video" || opts?.continueVideo) {
       useForge.getState().setMode(photoOn ? "i2v" : "t2v");
       useForge.getState().setSoundOn(true);
     } else if (tab === "comic") {
@@ -1694,7 +1785,7 @@ export function Studio() {
       useForge.getState().setMode("i2i");
     }
     const runMode =
-      tab === "video"
+      opts?.continueVideo || tab === "video"
         ? photoOn
           ? "i2v"
           : "t2v"
@@ -2045,6 +2136,10 @@ export function Studio() {
       apiWorkflow: api,
       uiWorkflow: ui,
       checkpoint: settingsNow.checkpoint || activeName,
+      chainOf: opts?.chainOf,
+      chainLeft:
+        opts?.chainLeft ??
+        (runMeta.video && !opts?.continueVideo ? Math.max(0, videoSegments(state.duration) - 1) : 0),
     };
     state.addJob(job);
     state.setExpandedPreview(finalPrompt);
@@ -2140,6 +2235,7 @@ export function Studio() {
       setBusy(false);
     }
   }
+  generateRef.current = generate;
 
   async function runMixes() {
     const names = mixPick.filter(isImageCheckpoint);
@@ -2239,7 +2335,7 @@ export function Studio() {
     <div className="flex min-h-dvh flex-col bg-bg pb-8 text-fg">
       <header className="flex flex-wrap items-center gap-2 px-3 py-3 md:gap-3 md:px-6">
         <p className="text-[15px] font-medium tracking-tight">Forge</p>
-        <span className="text-[11px] tabular-nums text-subtle">208</span>
+        <span className="text-[11px] tabular-nums text-subtle">209</span>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {meta.video ? (
             <select
@@ -3014,6 +3110,17 @@ export function Studio() {
               <Button size="icon" variant="secondary" className="size-10 rounded-full" onClick={() => void deleteThisStill()} aria-label="Shred">
                 <Trash2 />
               </Button>
+              {stageKind === "video" || /\.(mp4|webm|mov|m4v)$/i.test(active?.resultName || "") ? (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="rounded-full"
+                  onClick={() => void continueThisClip()}
+                  title="Last frame becomes the start of the next clip, then stitch"
+                >
+                  Extend
+                </Button>
+              ) : null}
             </>
           ) : (
             <Button size="sm" variant="secondary" className="rounded-full" onClick={editThisStill}>
@@ -3711,6 +3818,13 @@ export function Studio() {
                     onClick={() => {
                       useForge.getState().setDuration(d);
                     }}
+                    title={
+                      d === 6
+                        ? "One clip (~5s). Tap Extend to keep going."
+                        : d === 10
+                          ? "Two clips stitched (~10s)"
+                          : "Three clips stitched (~15s)"
+                    }
                   >
                     {d}s
                   </button>
@@ -3722,7 +3836,7 @@ export function Studio() {
                 size="sm"
                 variant={soundOn ? "default" : "secondary"}
                 onClick={() => useForge.getState().setSoundOn(!useForge.getState().soundOn)}
-                title="After the clip is done, mux a female voice + room tone with ffmpeg"
+                title="Scene sound after the clip: girl/dude voices + rain/fight/sex bed. Needs ffmpeg + espeak-ng on the PC."
               >
                 {soundOn ? "Sound on" : "Sound off"}
               </Button>
@@ -4383,6 +4497,11 @@ export function Studio() {
               <ThumbsDown />
               Bad
             </Button>
+            {zoom.kind === "video" ? (
+              <Button size="sm" variant="secondary" onClick={() => void continueThisClip(zoom.name)}>
+                Extend
+              </Button>
+            ) : null}
             <Button size="sm" variant="secondary" onClick={() => void deleteThisStill(zoom.src)}>
               <Trash2 />
               Shred

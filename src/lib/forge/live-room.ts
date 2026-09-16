@@ -168,3 +168,29 @@ export async function addClipSound(name: string, text: string): Promise<{ name?:
     return { error: err instanceof Error ? err.message : "sound failed" };
   }
 }
+
+export async function lastFrameOf(name: string): Promise<{ name?: string; dataUrl?: string; error?: string }> {
+  try {
+    const res = await fetch("/forge-api/last-frame", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    return (await res.json()) as { name?: string; dataUrl?: string; error?: string };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "last frame failed" };
+  }
+}
+
+export async function concatClips(names: string[]): Promise<{ name?: string; error?: string }> {
+  try {
+    const res = await fetch("/forge-api/concat", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ names }),
+    });
+    return (await res.json()) as { name?: string; error?: string };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "concat failed" };
+  }
+}
