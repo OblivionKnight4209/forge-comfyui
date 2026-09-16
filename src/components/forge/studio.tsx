@@ -2024,7 +2024,7 @@ export function Studio() {
     <div className="flex min-h-dvh flex-col bg-bg pb-8 text-fg">
       <header className="flex items-center gap-3 px-4 py-3 md:px-6">
         <p className="text-[15px] font-medium tracking-tight">Forge</p>
-        <span className="text-[11px] tabular-nums text-subtle">183</span>
+        <span className="text-[11px] tabular-nums text-subtle">184</span>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {meta.video ? (
             <select
@@ -3123,10 +3123,11 @@ export function Studio() {
                     st.setPrompt(idea);
                     promptRef.current?.focus();
                     if (st.mode === "ref2i") st.setRefPrompt(idea);
+                    void generate();
                   }}
                 >
                   <span className="mb-1 block text-[10px] uppercase tracking-wide text-muted">
-                    {i === 0 ? "Written" : `Option ${i + 1}`}
+                    {i === 0 ? "Tap to generate" : `Option ${i + 1} · tap to generate`}
                   </span>
                   {idea}
                 </button>
