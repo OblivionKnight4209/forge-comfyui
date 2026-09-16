@@ -180,6 +180,7 @@ export async function runBrain(opts: {
   checkpoint?: string;
   fresh?: boolean;
   seed?: number;
+  nsfwMode?: boolean;
 }): Promise<{ ok: true; text: string; model: string } | { ok: false; message: string }> {
   const base = process.env.OLLAMA_HOST || "http://127.0.0.1:11434";
   const probed = await probeOllama(base);
@@ -199,8 +200,8 @@ export async function runBrain(opts: {
           model,
           stream: false,
           messages: [
-            { role: "system", content: brainSystem({ wrap: opts.wrap, checkpoint: opts.checkpoint }) },
-            { role: "user", content: brainUser({ prompt: opts.prompt, flavor: opts.flavor, fresh: opts.fresh }) },
+            { role: "system", content: brainSystem({ wrap: opts.wrap, checkpoint: opts.checkpoint, nsfwMode: opts.nsfwMode }) },
+            { role: "user", content: brainUser({ prompt: opts.prompt, flavor: opts.flavor, fresh: opts.fresh, nsfwMode: opts.nsfwMode }) },
           ],
           options: { temperature: 1.25, top_p: 0.95, seed, num_predict: 400, num_ctx: 4096 },
         }),

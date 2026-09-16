@@ -68,6 +68,7 @@ type ForgeState = {
   ckptStyle: import("./types").CkptStyle;
   artWrap: string;
   qualityPick: string[];
+  nsfwMode: boolean;
   setMode: (mode: Mode) => void;
   setPrompt: (prompt: string) => void;
   setEditRemove: (text: string) => void;
@@ -114,6 +115,7 @@ type ForgeState = {
   setArtWrap: (id: string) => void;
   setQualityPick: (ids: string[]) => void;
   toggleQuality: (id: string) => void;
+  setNsfwMode: (on: boolean) => void;
 };
 
 function pickExisting(current: string, list: string[]) {
@@ -158,6 +160,7 @@ export const useForge = create<ForgeState>()(
       ckptStyle: "all",
       artWrap: "none",
       qualityPick: [],
+      nsfwMode: true,
       setMode: (mode) => {
         const cur = get();
         const meta = MODE_META[mode];
@@ -452,6 +455,7 @@ export const useForge = create<ForgeState>()(
           artWrap: next.includes("real") && get().artWrap === "none" ? "photo" : get().artWrap,
         });
       },
+      setNsfwMode: (nsfwMode) => set({ nsfwMode }),
     }),
     {
       name: "forge-studio-v48",
@@ -508,6 +512,7 @@ export const useForge = create<ForgeState>()(
         ckptStyle: s.ckptStyle,
         artWrap: s.artWrap,
         qualityPick: s.qualityPick,
+        nsfwMode: s.nsfwMode,
         blankStage: s.blankStage,
       }),
     },

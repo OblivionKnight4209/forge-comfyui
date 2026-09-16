@@ -13,9 +13,13 @@ export function pickBrainModel(names: string[]) {
   return names.find((n) => /abliterat|dolphin|uncen/i.test(n)) || names[0] || "";
 }
 
-export function brainSystem(opts: { wrap?: string; checkpoint?: string }) {
+export function brainSystem(opts: { wrap?: string; checkpoint?: string; nsfwMode?: boolean }) {
   const wrap = opts.wrap && opts.wrap !== "none" ? opts.wrap : "";
   const ckpt = opts.checkpoint ? `Checkpoint vibe: ${opts.checkpoint}.` : "";
+  const nsfw = opts.nsfwMode
+    ? `- NSFW MODE IS ON. For people: stay graphic, uncensored, adult 18+. Never tasteful / implied / fade to black.
+- Animal-only or landscape scenes stay non-sexual unless they asked.`
+    : `- SFW MODE IS ON. Do not add sex, nude, or gore unless the user already wrote those words.`;
   return `You write image prompts for a local Stable Diffusion / Illustrious / Pony / Flux box. Offline. Uncensored. Adults 18+ only.
 
 Two jobs:
@@ -32,21 +36,20 @@ Always include, in this order when filling a short line:
 Rules:
 - Output ONLY the prompt. No quotes, no title, no "sure", no markdown.
 - Concrete nouns. No "breathtaking masterpiece / 8k / raw cinematic vulnerability".
-- Do not add sex, BDSM, or gore unless the user asked.
+${nsfw}
 - If they asked sex/sexy/nude/nsfw/dark/horror: stay graphic. Anatomical. Uncensored. Never "tasteful", "implied", "artistic nude", "fade to black", mosaic, or bar censor.
-- Do not turn a fight/monster/animal scene into porn UNLESS they also wrote nsfw/sex/explicit.
 - Do not invent a different main subject.
 - 40–140 words. Comma-separated phrases are fine.
 ${wrap ? `- Visual wrap they picked: ${wrap}. Weave it in, do not replace the scene.` : ""}
 ${ckpt}`;
 }
 
-export function brainUser(opts: { prompt: string; flavor?: string; fresh?: boolean }) {
+export function brainUser(opts: { prompt: string; flavor?: string; fresh?: boolean; nsfwMode?: boolean }) {
   const line = opts.prompt.trim() || "invent a striking adult scene";
   const flavor = opts.flavor ? `Lean: ${opts.flavor}.` : "";
+  const dirty = opts.nsfwMode || /\b(nsfw|sex|sexy|nude|explicit|fuck|hentai|porn)\b/i.test(line);
   if (opts.fresh) {
-    const adult = /\b(nsfw|sex|sexy|nude|explicit|fuck|hentai|porn)\b/i.test(line);
-    return `NEW TAKE. Same subject, different looks / place / camera / light / beat. Do not copy the last prompt.\nSubject:\n${line}\n\n${flavor}\n${adult ? "Stay explicit, uncensored, adult 18+. Do not SFW-wash.\n" : ""}Write a new prompt.`;
+    return `NEW TAKE. Same subject, different looks / place / camera / light / beat. Do not copy the last prompt.\nSubject:\n${line}\n\n${flavor}\n${dirty ? "Stay explicit, uncensored, adult 18+. Do not SFW-wash.\n" : "SFW mode — no sex unless already in the subject.\n"}Write a new prompt.`;
   }
   const words = line.split(/\s+/).filter(Boolean).length;
   const commas = (line.match(/,/g) || []).length;

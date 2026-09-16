@@ -190,6 +190,15 @@ export function isAdult(text: string) {
   return ADULT_RE.test(text);
 }
 
+/** NSFW switch: explicit fill for people. Animals/fights stay non-porn unless the prompt already is. */
+export function nsfwWanted(text: string, nsfwMode = false): boolean {
+  if (wantsSexAct(text) || isAdult(text)) return true;
+  if (!nsfwMode) return false;
+  const c = lookCast(text);
+  if (c.animals.length && !c.girl && !c.man) return false;
+  return true;
+}
+
 export function keepNeutral(out: string, user: string, flavor: PromptFlavor): string {
   const u = (user || "").toLowerCase();
   const explicit = /^(sex|bdsm|dark|taboo|horror)$/.test(flavor);
@@ -627,7 +636,7 @@ export function tokenOverlap(a: string, b: string): number {
 }
 
 /** Keep every phrase they typed. Only add missing looks / place / camera / light. */
-export function fillGaps(text: string, anime: boolean, rng: () => number): string {
+export function fillGaps(text: string, anime: boolean, rng: () => number, nsfwMode = false): string {
   const lead = (text || "").replace(/\s+/g, " ").trim();
   if (!lead) return lead;
   if (isShortSubject(lead)) return lookFill(lead, anime, rng);
@@ -656,12 +665,13 @@ export function fillGaps(text: string, anime: boolean, rng: () => number): strin
   if (!/anime illustration|photograph|sharp focus|highly detailed/i.test(lead)) {
     extra.push(anime ? "anime illustration" : "photograph");
   }
-  if (isAdult(lead)) {
+  if (isAdult(lead) || nsfwWanted(lead, nsfwMode)) {
     if (!/\buncensored\b/i.test(lead)) extra.push("uncensored", "explicit", "nsfw", "adult 18+");
     extra.push("detailed anatomy");
   }
   if (!extra.length) return lead;
-  return keepNeutral(joinScene([lead, ...extra], isAdult(lead)), lead, isAdult(lead) ? "sex" : "enhance");
+  const dirty = isAdult(lead) || nsfwWanted(lead, nsfwMode);
+  return keepNeutral(joinScene([lead, ...extra], dirty), lead, dirty ? "sex" : "enhance");
 }
 
 function lookFill(text: string, anime: boolean, rng: () => number): string {
@@ -1245,6 +1255,7 @@ export function grokExpand(opts: {
   family?: "flux" | "sdxl" | "sd15";
   checkpoint?: string;
   roll?: "normal" | "random";
+  nsfwMode?: boolean;
 }): string {
   const raw = (opts.typed ?? "").replace(/\s+/g, " ").trim();
   if (!raw) return raw;
@@ -1258,7 +1269,7 @@ export function grokExpand(opts: {
   const anime =
     opts.family === "sd15" ||
     (/mix|anime|kitten|illustrious|noob|nai|pony/.test(ckpt) && !ckpt.includes("flux"));
-  const nsfw = wantsSexAct(lead) || isAdult(lead);
+  const nsfw = nsfwWanted(lead, opts.nsfwMode);
   if (opts.roll === "random" || /\{[^{}|]+\|/.test(wild)) {
     const curly = /\{[^{}|]+\|/.test(wild) ? wild : withRandomBlocks(lead, nsfw);
     const flat = flattenPrompt(curly, opts.seed);
@@ -1279,7 +1290,7 @@ export function grokExpand(opts: {
       opts.seed,
     );
   } else {
-    out = fillGaps(lead, anime, rng);
+    out = fillGaps(lead, anime, rng, opts.nsfwMode);
   }
   const thin = (s: string) =>
     tooClose(s, lead) || tooClose(s, raw) || s.split(/\s+/).length <= lead.split(/\s+/).length + 4;

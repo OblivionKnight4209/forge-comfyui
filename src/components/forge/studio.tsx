@@ -81,7 +81,7 @@ import {
   type Mode,
   type ModelFamily,
 } from "@/lib/forge/types";
-import { PROMPT_FLAVORS, expandPrompt, grokExpand, grokMotion, writeIdeas, writePrompt, isAdult, flattenPrompt, userLead, recoverScene, composeNewScene, isPurpleProse, sceneCore, tokenOverlap, type PromptFlavor } from "@/lib/forge/wildcards";
+import { PROMPT_FLAVORS, expandPrompt, grokExpand, grokMotion, writeIdeas, writePrompt, isAdult, flattenPrompt, userLead, recoverScene, composeNewScene, isPurpleProse, sceneCore, tokenOverlap, nsfwWanted, type PromptFlavor } from "@/lib/forge/wildcards";
 import { composeI2iPrompt, expandEditFields } from "@/lib/forge/edit-prompt";
 import { isVideoName, mediaMime, withVideoDataUrl } from "@/lib/forge/media-mime";
 import { writeExtreme, writeDarkSet, writeTabooSet, writeHorrorSet, isWashed, NSFW_TYPES, nsfwGroup, writeMenus, WHO_BITS, WHERE_BITS, MORE_BITS, COMIC_BITS, EVIL_BITS, FACE_BITS, BODY_BITS, CLOTHES_BITS, PLACE_BITS, CAM_BITS, LIGHT_BITS } from "@/lib/forge/extreme";
@@ -233,6 +233,7 @@ export function Studio() {
   const ckptStyle = useForge((s) => s.ckptStyle);
   const artWrap = useForge((s) => s.artWrap);
   const qualityPick = useForge((s) => s.qualityPick);
+  const nsfwMode = useForge((s) => s.nsfwMode);
   const promptRoll = useForge((s) => s.promptRoll);
   const expandedPreview = useForge((s) => s.expandedPreview);
   const logs = useForge((s) => s.logs);
@@ -1105,7 +1106,11 @@ export function Studio() {
       state.mode === "ref2i"
         ? state.refPrompt.trim() || state.prompt.trim()
         : state.prompt.trim();
-    const core = sceneCore(line) || line || "an adult";
+    const core0 = sceneCore(line) || line || "an adult";
+    const core =
+      state.nsfwMode && nsfwWanted(core0, true) && !/\bnsfw\b/i.test(core0)
+        ? `${core0}, nsfw, explicit, uncensored, adult 18+`
+        : core0;
     setBrainBusy(true);
     setDock("write");
     logForge("info", "Brain", `New take of “${core.slice(0, 48)}”`);
@@ -1118,6 +1123,7 @@ export function Studio() {
         checkpoint: state.settings.checkpoint,
         fresh: true,
         seed,
+        nsfwMode: state.nsfwMode,
       });
       const fam =
         state.settings.stillFamily === "sd15" || guessArch(state.settings.checkpoint) === "sd15"
@@ -1133,6 +1139,7 @@ export function Studio() {
           family: fam,
           checkpoint: state.settings.checkpoint,
           roll: state.promptRoll,
+          nsfwMode: state.nsfwMode,
         }),
       );
       if (!r.ok) logForge("warn", "Brain", r.message);
@@ -1192,6 +1199,7 @@ export function Studio() {
       family: fam,
       checkpoint: state.settings.checkpoint,
       roll: state.promptRoll,
+      nsfwMode: state.nsfwMode,
     });
     const local =
       flavor === "horror"
@@ -1417,6 +1425,7 @@ export function Studio() {
         artWrap: state.artWrap,
         quality: state.qualityPick,
         roll: state.promptRoll,
+        nsfwMode: state.nsfwMode,
         checkpoint: opts?.checkpoint || state.settings.checkpoint,
         settings: opts?.checkpoint
           ? { ...state.settings, ...settingsForCheckpoint(opts.checkpoint) }
@@ -1778,6 +1787,7 @@ export function Studio() {
           family: fam === "sd15" || fam === "flux" || fam === "sdxl" ? fam : "sdxl",
           checkpoint: settingsNow.checkpoint,
           roll: state.promptRoll,
+          nsfwMode: state.nsfwMode,
         }),
         nextSeed,
       );
@@ -1795,6 +1805,7 @@ export function Studio() {
           family: fam === "sd15" || fam === "flux" || fam === "sdxl" ? fam : "sdxl",
           checkpoint: settingsNow.checkpoint,
           roll: state.promptRoll,
+          nsfwMode: state.nsfwMode,
         }),
         nextSeed,
       );
@@ -2036,7 +2047,7 @@ export function Studio() {
     <div className="flex min-h-dvh flex-col bg-bg pb-8 text-fg">
       <header className="flex items-center gap-3 px-4 py-3 md:px-6">
         <p className="text-[15px] font-medium tracking-tight">Forge</p>
-        <span className="text-[11px] tabular-nums text-subtle">186</span>
+        <span className="text-[11px] tabular-nums text-subtle">187</span>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {meta.video ? (
             <select
@@ -2127,6 +2138,22 @@ export function Studio() {
         >
           New
         </Button>
+        <div className="flex shrink-0 rounded-full bg-raised p-0.5" title="SFW fills clothes and place. NSFW fills explicit uncensored for people.">
+          <button
+            type="button"
+            className={cn("h-8 rounded-full px-2.5 text-xs", !nsfwMode ? "bg-accent text-accent-fg" : "text-subtle")}
+            onClick={() => useForge.getState().setNsfwMode(false)}
+          >
+            SFW
+          </button>
+          <button
+            type="button"
+            className={cn("h-8 rounded-full px-2.5 text-xs", nsfwMode ? "bg-accent text-accent-fg" : "text-subtle")}
+            onClick={() => useForge.getState().setNsfwMode(true)}
+          >
+            NSFW
+          </button>
+        </div>
         <Button
           variant="ghost"
           size="icon"
@@ -4609,11 +4636,32 @@ function SettingsForm({
   onOpen: (s: "story" | "history" | "graph") => void;
 }) {
   const settings = useForge((s) => s.settings);
+  const nsfwMode = useForge((s) => s.nsfwMode);
   const comfy = useForge((s) => s.comfy);
   const patch = (p: Partial<typeof settings>) => useForge.getState().setSettings(p);
   const primary = urls[0] ?? "http://YOUR-PC-IP:8080";
   return (
     <div className="space-y-4">
+      <div>
+        <Label>Content</Label>
+        <p className="mt-1 text-xs text-subtle">SFW fills looks and place only. NSFW fills explicit uncensored for people. Animals stay non-porn unless you type it. Underage always stays in the negative.</p>
+        <div className="mt-2 flex rounded-full bg-raised p-0.5">
+          <button
+            type="button"
+            className={cn("h-9 flex-1 rounded-full text-sm", !nsfwMode ? "bg-bg text-fg" : "text-subtle")}
+            onClick={() => useForge.getState().setNsfwMode(false)}
+          >
+            SFW
+          </button>
+          <button
+            type="button"
+            className={cn("h-9 flex-1 rounded-full text-sm", nsfwMode ? "bg-accent text-accent-fg" : "text-subtle")}
+            onClick={() => useForge.getState().setNsfwMode(true)}
+          >
+            NSFW
+          </button>
+        </div>
+      </div>
       <div className="flex flex-wrap gap-2">
         <Button size="sm" variant="secondary" onClick={() => onOpen("story")}>
           Story

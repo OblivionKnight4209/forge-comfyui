@@ -32,6 +32,7 @@ export type GenerateIntent = {
   artWrap?: string;
   quality?: string[];
   roll?: "normal" | "random";
+  nsfwMode?: boolean;
   checkpoint?: string;
   settings?: Partial<ComfySettings>;
   images?: { filename: string; dataUrl: string }[];
@@ -103,6 +104,7 @@ export async function runGenerateIntent(intent: GenerateIntent) {
           seed: intent.seed || 1,
           checkpoint: settings.checkpoint,
           roll: intent.roll || "normal",
+          nsfwMode: intent.nsfwMode,
         });
   const loraCkpt = video ? settings.wanUnet || settings.checkpoint : settings.checkpoint;
   const stacked = pickLorasForPrompt(

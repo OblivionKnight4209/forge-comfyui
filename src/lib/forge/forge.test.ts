@@ -48,7 +48,7 @@ import {
   chunkPrompt,
 } from "./workflows.ts";
 import { isVideoName, mediaMime, withVideoDataUrl } from "./media-mime.ts";
-import { expandPrompt, parseInlineLoras, writePrompt, keepNeutral, userLead, grokExpand, grokMotion, flattenPrompt, withRandomBlocks, recoverScene, isPurpleProse, DEFAULT_WILDCARDS, isAdult, composeNewScene, isShortSubject, sceneCore, tokenOverlap } from "./wildcards.ts";
+import { expandPrompt, parseInlineLoras, writePrompt, keepNeutral, userLead, grokExpand, grokMotion, flattenPrompt, withRandomBlocks, recoverScene, isPurpleProse, DEFAULT_WILDCARDS, isAdult, composeNewScene, isShortSubject, sceneCore, tokenOverlap, nsfwWanted } from "./wildcards.ts";
 import { isWashed, nsfwGroup, writeExtreme, writeHorrorSet, writeTabooSet, writeDarkSet, NSFW_TYPES, writeMenus, FACE_BITS, BODY_BITS, CLOTHES_BITS, PLACE_BITS } from "./extreme.ts";
 import { applyArtWrap, applyQualityOffers, qualityWantsHires, randomSceneLine, LOOK_APPENDS } from "./looks.ts";
 import { pickBrainModel, cleanBrainOut, brainSystem } from "./brain.ts";
@@ -1324,6 +1324,40 @@ describe("wildcards extra", () => {
     });
     assert.match(t, /uncensored/i);
     assert.doesNotMatch(t, /tasteful|implied nudity|fade to black/i);
+  });
+  it("NSFW mode fills people explicit, not cat fights", () => {
+    const ckpt = "DasiwaIllustrious.safetensors";
+    assert.equal(nsfwWanted("goblin vs woman", true), true);
+    assert.equal(nsfwWanted("cat fight a dog", true), false);
+    const person = grokExpand({
+      typed: "goblin vs woman",
+      files: DEFAULT_WILDCARDS,
+      seed: 5,
+      family: "sdxl",
+      checkpoint: ckpt,
+      nsfwMode: true,
+    });
+    assert.match(person, /uncensored|nsfw|explicit/i);
+    const cat = grokExpand({
+      typed: "cat fight a dog",
+      files: DEFAULT_WILDCARDS,
+      seed: 5,
+      family: "sdxl",
+      checkpoint: ckpt,
+      nsfwMode: true,
+    });
+    assert.doesNotMatch(cat, /\b(pussy|cock|ahegao|handjob)\b/i);
+  });
+  it("SFW mode does not stamp uncensored on a fight", () => {
+    const t = grokExpand({
+      typed: "goblin vs woman",
+      files: DEFAULT_WILDCARDS,
+      seed: 5,
+      family: "sdxl",
+      checkpoint: "DasiwaIllustrious.safetensors",
+      nsfwMode: false,
+    });
+    assert.doesNotMatch(t, /uncensored, explicit, nsfw/i);
   });
   it("two Brain seeds on the same subject are not copies", () => {
     const a = grokExpand({

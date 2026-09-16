@@ -18,6 +18,7 @@ export const Route = createFileRoute("/api/brain")({
           checkpoint?: string;
           fresh?: boolean;
           seed?: number;
+          nsfwMode?: boolean;
         };
         const { runBrain } = await import("@/lib/forge/ollama.server");
         const result = await runBrain({
@@ -27,6 +28,7 @@ export const Route = createFileRoute("/api/brain")({
           checkpoint: body.checkpoint,
           fresh: body.fresh,
           seed: body.seed,
+          nsfwMode: body.nsfwMode,
         });
         return Response.json(result);
       },

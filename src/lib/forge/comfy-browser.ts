@@ -100,6 +100,7 @@ export async function lanBrain(body: {
   checkpoint?: string;
   fresh?: boolean;
   seed?: number;
+  nsfwMode?: boolean;
 }): Promise<{ ok: true; text: string; model: string } | { ok: false; message: string }> {
   try {
     const res = await fetch("/api/brain", {
