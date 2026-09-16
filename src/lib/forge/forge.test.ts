@@ -1156,6 +1156,11 @@ describe("graphs all modes", () => {
     const g = graph({ mode: "i2i", denoise: 0.7, imageCount: 1, settings: settings({ batchSize: 2 }) });
     assert.ok(classes(g).includes("RepeatLatentBatch") || (settings().batchSize ?? 1) >= 1);
   });
+  it("text batch sets EmptyLatentImage batch_size", () => {
+    const g = graph({ mode: "t2i", settings: settings({ batchSize: 4 }) });
+    const empty = Object.values(g).find((n) => n.class_type === "EmptyLatentImage");
+    assert.equal(empty?.inputs.batch_size, 4);
+  });
   it("ref2i stitches every still, not only the first", () => {
     const g = graph({
       mode: "ref2i",

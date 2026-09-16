@@ -201,6 +201,7 @@ export type Job = {
   resultName?: string;
   resultFolder?: "input" | "output";
   resultKind: "image" | "video";
+  batch?: { src: string; name: string; kind: "image" | "video" }[];
   scan?: ScanResult;
   apiWorkflow: Record<string, unknown>;
   uiWorkflow: Record<string, unknown>;

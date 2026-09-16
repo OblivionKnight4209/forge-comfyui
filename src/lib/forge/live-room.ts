@@ -15,6 +15,7 @@ export type LiveJob = {
   checkpoint?: string;
   progress?: number;
   log?: string;
+  batchNames?: string[];
 };
 
 export function isLanRemote() {
@@ -58,6 +59,7 @@ export function slimJob(job: Job): LiveJob {
     checkpoint: job.checkpoint,
     progress: job.progress,
     log: job.log,
+    batchNames: job.batch?.map((b) => b.name).filter(Boolean),
   };
 }
 
@@ -99,6 +101,14 @@ export function mergeLiveJobs(local: Job[], remote: LiveJob[]): Job[] {
       apiWorkflow: prev?.apiWorkflow || {},
       uiWorkflow: prev?.uiWorkflow || {},
       scan: prev?.scan,
+      batch:
+        r.batchNames && r.batchNames.length
+          ? r.batchNames.map((name) => ({
+              src: `/forge-media?folder=${r.resultFolder === "input" ? "input" : "output"}&name=${encodeURIComponent(name)}`,
+              name,
+              kind: r.resultKind,
+            }))
+          : prev?.batch,
     });
   }
   return [...map.values()].sort((a, b) => b.createdAt - a.createdAt).slice(0, 40);

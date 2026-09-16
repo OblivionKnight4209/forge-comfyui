@@ -54,7 +54,7 @@ export const queueComfyFn = createServerFn({ method: "POST" })
 export const pollComfyFn = createServerFn({ method: "POST" })
   .validator(z.object({ baseUrl: z.string(), promptId: z.string() }))
   .handler(async ({ data }) => {
-    const { readHistory, viewFile } = await import("./comfy.server");
+    const { readHistory } = await import("./comfy.server");
     const hist = await readHistory(data.baseUrl, data.promptId);
     if ("error" in hist && hist.error) {
       return { ready: false as const, error: hist.error, log: hist.log ?? "", progress: 0 };
@@ -62,12 +62,15 @@ export const pollComfyFn = createServerFn({ method: "POST" })
     if (!hist.ready) {
       return { ready: false as const, progress: hist.progress ?? 10, log: "log" in hist ? String(hist.log ?? "") : "" };
     }
-    const views: { dataUrl: string; kind: "image" | "video" }[] = [];
+    const views: { dataUrl: string; kind: "image" | "video"; filename: string }[] = [];
     for (const file of hist.files.slice(0, 8)) {
-      const viewed = await viewFile(data.baseUrl, file);
+      const folder = file.type === "input" ? "input" : "output";
+      const media = `/forge-media?folder=${folder}&name=${encodeURIComponent(file.filename)}`;
+      const video = /\.(mp4|webm|gif|mov|m4v)$/i.test(file.filename);
       views.push({
-        dataUrl: viewed.dataUrl,
-        kind: viewed.mime.startsWith("video") ? "video" : "image",
+        dataUrl: media,
+        kind: video ? "video" : "image",
+        filename: file.filename,
       });
     }
     const first = views[0];
@@ -78,6 +81,8 @@ export const pollComfyFn = createServerFn({ method: "POST" })
       ready: true as const,
       progress: 100,
       dataUrl: first.dataUrl,
+      filename: first.filename,
+      folder: (hist.files[0]?.type === "input" ? "input" : "output") as "input" | "output",
       kind: first.kind,
       tags: hist.tags,
       extras: views.slice(1),

@@ -172,6 +172,7 @@ export function Studio() {
   const [slides, setSlides] = useState<{ folder: "input" | "output"; name: string; mtime: number }[]>([]);
   const [likes, setLikes] = useState<{ id: string; src: string; prompt: string; seed: number }[]>([]);
   const [zoom, setZoom] = useState<{ src: string; kind: "image" | "video"; name?: string } | null>(null);
+  const [batchFocus, setBatchFocus] = useState(0);
   const [nsfwPick, setNsfwPick] = useState<Set<string>>(new Set());
   const [ideas, setIdeas] = useState<string[]>([]);
   const [graphs, setGraphs] = useState<string[]>([]);
@@ -512,29 +513,45 @@ export function Studio() {
               setQueueBanner(sounded.error);
             }
           }
+          const extraViews = (r.extras ?? []).map((extra) => {
+            const name = "filename" in extra && extra.filename ? extra.filename : "";
+            const src = name
+              ? `/forge-media?folder=output&name=${encodeURIComponent(name)}`
+              : extra.dataUrl;
+            return {
+              src,
+              name: name || "Forge.png",
+              kind: extra.kind,
+            };
+          });
+          const firstSrc =
+            resultName && !resultDataUrl?.startsWith("data:")
+              ? `/forge-media?folder=${("folder" in r ? r.folder : "output") || "output"}&name=${encodeURIComponent(resultName)}`
+              : resultDataUrl || "";
+          const batch = [
+            firstSrc
+              ? {
+                  src: firstSrc,
+                  name: resultName || "Forge.png",
+                  kind: (isVid ? "video" : r.kind || "image") as "image" | "video",
+                }
+              : null,
+            ...extraViews,
+          ].filter((x): x is { src: string; name: string; kind: "image" | "video" } => !!x && !!x.src);
           useForge.getState().patchJob(job.id, {
             status: "done",
-            resultDataUrl,
-            resultKind: r.kind,
+            resultDataUrl: firstSrc || resultDataUrl,
+            resultKind: isVid ? "video" : r.kind || "image",
             resultName,
             resultFolder: "folder" in r ? r.folder : "output",
+            batch: batch.length > 1 ? batch : undefined,
           });
           const done = useForge.getState().jobs.find((j) => j.id === job.id);
           if (done) void pushLive(done);
           setShowSource(false);
-          if (r.extras?.length) {
-            for (const extra of r.extras) {
-              useForge.getState().addJob({
-                ...job,
-                id: uid(),
-                status: "done",
-                resultDataUrl: extra.dataUrl,
-                resultKind: extra.kind,
-                resultName: "filename" in extra ? extra.filename : undefined,
-                progress: 100,
-              });
-            }
-            toast.success(`Batch ${1 + r.extras.length} stills`);
+          setBatchFocus(0);
+          if (batch.length > 1) {
+            logForge("info", "Batch", `${batch.length} stills`);
           }
           const tagged =
             "tags" in r && r.tags
@@ -560,10 +577,12 @@ export function Studio() {
 
   const lastResult = active?.resultDataUrl || null;
   const sourceSrc = media[0]?.dataUrl || null;
-  const stageSrc = tab === "combine" ? null : showSource && sourceSrc ? sourceSrc : lastResult;
+  const batchStills = !showSource && tab !== "combine" && (active?.batch?.length || 0) > 1 ? active!.batch! : [];
+  const focusStill = batchStills[Math.min(batchFocus, Math.max(0, batchStills.length - 1))];
+  const stageSrc = tab === "combine" ? null : showSource && sourceSrc ? sourceSrc : focusStill?.src || lastResult;
   const stageKind = showSource && media[0]
     ? media[0].kind
-    : (active?.resultKind ?? "image");
+    : (focusStill?.kind ?? active?.resultKind ?? "image");
   const scan = active?.scan ?? liveScan;
 
   useEffect(() => {
@@ -2138,7 +2157,7 @@ export function Studio() {
     <div className="flex min-h-dvh flex-col bg-bg pb-8 text-fg">
       <header className="flex flex-wrap items-center gap-2 px-3 py-3 md:gap-3 md:px-6">
         <p className="text-[15px] font-medium tracking-tight">Forge</p>
-        <span className="text-[11px] tabular-nums text-subtle">202</span>
+        <span className="text-[11px] tabular-nums text-subtle">203</span>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {meta.video ? (
             <select
@@ -2467,7 +2486,37 @@ export function Studio() {
         }}
         onDrop={onStageDrop}
       >
-        {stageSrc ? (
+        {batchStills.length > 1 ? (
+          <div
+            className={cn(
+              "mx-auto grid max-h-[70dvh] w-full max-w-5xl gap-2 p-3 md:max-h-[72dvh]",
+              batchStills.length <= 2 ? "grid-cols-2" : batchStills.length <= 4 ? "grid-cols-2" : "grid-cols-4",
+            )}
+          >
+            {batchStills.map((b, i) => (
+              <button
+                key={`${b.name}-${i}`}
+                type="button"
+                className={cn(
+                  "relative overflow-hidden rounded-xl bg-raised",
+                  i === batchFocus && "ring-2 ring-accent",
+                )}
+                onClick={() => {
+                  setBatchFocus(i);
+                  setZoom({ src: b.src, kind: b.kind, name: b.name });
+                }}
+                title={b.name}
+              >
+                {b.kind === "video" ? (
+                  <ForgeClip src={b.src} muted className="max-h-[32dvh] w-full object-contain md:max-h-[34dvh]" />
+                ) : (
+                  <img src={b.src} alt="" className="max-h-[32dvh] w-full object-contain md:max-h-[34dvh]" />
+                )}
+                <span className="absolute left-1 top-1 rounded bg-bg/80 px-1.5 text-[10px] text-muted">{i + 1}</span>
+              </button>
+            ))}
+          </div>
+        ) : stageSrc ? (
           stageKind === "video" ? (
             <ForgeClip src={stageSrc} controls autoPlay className="forge-still mx-auto size-full max-h-[70dvh] object-contain md:max-h-[72dvh]" />
           ) : (
@@ -2494,7 +2543,11 @@ export function Studio() {
                 title="Play — this still becomes a clip"
                 onClick={(e) => {
                   e.stopPropagation();
-                  playStill(stageSrc, active?.resultName || "still.png", active?.resultFolder || "output");
+                  playStill(
+                    focusStill?.src || stageSrc,
+                    focusStill?.name || active?.resultName || "still.png",
+                    active?.resultFolder || "output",
+                  );
                 }}
               >
                 <Play className="size-6 fill-current" />
@@ -2872,44 +2925,67 @@ export function Studio() {
               </button>
             );
           })}
-          {jobs.map((job) => (
-            <div key={job.id} className="relative shrink-0">
+          {jobs.flatMap((job) => {
+            const items =
+              job.batch && job.batch.length > 1
+                ? job.batch.map((b, i) => ({
+                    key: `${job.id}-${b.name}-${i}`,
+                    src: b.src,
+                    name: b.name,
+                    kind: b.kind,
+                    i,
+                    job,
+                  }))
+                : [
+                    {
+                      key: job.id,
+                      src: job.resultDataUrl || "",
+                      name: job.resultName || `seed ${job.seed}`,
+                      kind: job.resultKind,
+                      i: 0,
+                      job,
+                    },
+                  ];
+            return items.map((item) => (
+            <div key={item.key} className="relative shrink-0">
               <button
                 type="button"
                 onClick={() => {
-                  if (!job.resultDataUrl) {
-                    useForge.getState().setActiveJob(job.id);
+                  if (!item.src) {
+                    useForge.getState().setActiveJob(item.job.id);
                     return;
                   }
-                  if (job.resultKind !== "video" && (tab === "combine" || mode === "ref2i")) {
+                  useForge.getState().setActiveJob(item.job.id);
+                  setBatchFocus(item.i);
+                  if (item.kind !== "video" && (tab === "combine" || mode === "ref2i")) {
                     void placeLibraryStill(
-                      { src: job.resultDataUrl, name: job.resultName || `seed ${job.seed}`, folder: job.resultFolder },
+                      { src: item.src, name: item.name, folder: item.job.resultFolder },
                       "add",
                     );
                     return;
                   }
-                  if (job.resultKind !== "video" && tab === "video") {
-                    loadForVideo(job.resultDataUrl, job.resultName || `seed ${job.seed}`, job.resultFolder);
+                  if (item.kind !== "video" && tab === "video") {
+                    loadForVideo(item.src, item.name, item.job.resultFolder);
                     return;
                   }
-                  adoptJob(job);
+                  adoptJob(item.job);
                   setZoom({
-                    src: job.resultDataUrl,
-                    kind: job.resultKind,
-                    name: job.resultName || `seed ${job.seed}`,
+                    src: item.src,
+                    kind: item.kind,
+                    name: item.name,
                   });
                 }}
                 className={cn(
                   "h-16 w-16 overflow-hidden rounded-lg bg-raised",
-                  job.id === active?.id && "ring-2 ring-accent",
+                  item.job.id === active?.id && item.i === batchFocus && "ring-2 ring-accent",
                 )}
-                title="Enlarge"
+                title={item.name}
               >
-                {job.resultDataUrl ? (
-                  job.resultKind === "video" ? (
-                    <ForgeClip src={job.resultDataUrl} muted className="size-full object-cover" />
+                {item.src ? (
+                  item.kind === "video" ? (
+                    <ForgeClip src={item.src} muted className="size-full object-cover" />
                   ) : (
-                    <img src={job.resultDataUrl} alt="" className="size-full object-cover" />
+                    <img src={item.src} alt="" className="size-full object-cover" />
                   )
                 ) : (
                   <span className="flex size-full items-center justify-center text-[10px] text-subtle">
@@ -2929,7 +3005,8 @@ export function Studio() {
                 <Trash2 className="size-3" />
               </button>
             </div>
-          ))}
+            ));
+          })}
         </div>
       ) : null}
 
