@@ -1833,7 +1833,7 @@ export function Studio() {
       logForge(
         "warn",
         "LoRA",
-        `Wrong mix — skipped: ${match.blocked.map((b) => `${b.name} (${guessLoraLane(b.filename)})`).join(", ")}. 1.5 stays off XL. Pony stays off Illustrious. WAN stays on video.`,
+        `Wrong mix — skipped: ${match.blocked.map((b) => `${b.name} (${guessLoraLane(b.filename)})`).join(", ")}. 1.5 mixes only take 1.5 LoRAs. XL / Pony / Illustrious stay off 1.5 or Comfy dies on tensor shape.`,
       );
     }
     const catalog = useForge.getState().comfy?.loras ?? [];
@@ -2115,7 +2115,7 @@ export function Studio() {
     <div className="flex min-h-dvh flex-col bg-bg pb-8 text-fg">
       <header className="flex items-center gap-3 px-4 py-3 md:px-6">
         <p className="text-[15px] font-medium tracking-tight">Forge</p>
-        <span className="text-[11px] tabular-nums text-subtle">197</span>
+        <span className="text-[11px] tabular-nums text-subtle">198</span>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {meta.video ? (
             <select

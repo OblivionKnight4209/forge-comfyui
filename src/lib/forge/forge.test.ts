@@ -920,6 +920,9 @@ describe("loras", () => {
     assert.equal(r.ok.length, 2);
     assert.equal(guessLoraFamily("Hestia.safetensors"), "any");
     assert.equal(loraFitsCheckpoint("Hestia.safetensors", "sdxl"), true);
+    assert.equal(loraFitsCheckpoint("Hestia.safetensors", "sd15"), false);
+    assert.equal(loraFitsLane("Angelina.safetensors", "chilloutmix.safetensors"), false);
+    assert.equal(loraFitsLane("Angelina.safetensors", "AnythingXL_xl.safetensors"), true);
   });
   it("injects trigger words once", () => {
     const loras: LoraEntry[] = [

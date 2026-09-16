@@ -663,12 +663,14 @@ export function loraFitsLane(loraName: string, ckptName: string): boolean {
   }
   if (cl === "wan" || ll === "wan") return cl === "wan" && ll === "wan";
   if (cl === "flux" || ll === "flux") return cl === "flux" && ll === "flux";
-  if (cl === "sd15") return ll === "sd15" || ll === "any";
+  // SD1.5 tensors are 768-wide. XL / Pony / IL / unlabeled character LoRAs are 1024–2048
+  // and crash Comfy with "shape [1280, 768] is invalid for input of size 1310720".
+  if (cl === "sd15") return ll === "sd15";
   if (ll === "sd15") return false;
-  if (cl === "pony") return ll === "pony" || ll === "sdxl" || ll === "any";
-  if (cl === "illustrious") return ll === "illustrious" || ll === "sdxl" || ll === "any";
-  if (cl === "sdxl") return ll === "sdxl" || ll === "illustrious" || ll === "any";
-  if (ll === "any") return cl !== "wan" && cl !== "flux";
+  if (ll === "any") return cl === "sdxl" || cl === "illustrious" || cl === "pony";
+  if (cl === "pony") return ll === "pony" || ll === "sdxl";
+  if (cl === "illustrious") return ll === "illustrious" || ll === "sdxl";
+  if (cl === "sdxl") return ll === "sdxl" || ll === "illustrious";
   return ll === cl;
 }
 
@@ -686,7 +688,7 @@ export function loraFitsCheckpoint(loraName: string, ckptFamily: ModelFamily, ck
   const lf = guessLoraLane(loraName);
   if (ckptFamily === "flux") return lf === "flux";
   if (ckptFamily === "wan") return lf === "wan";
-  if (ckptFamily === "sd15") return lf === "sd15" || lf === "any";
+  if (ckptFamily === "sd15") return lf === "sd15";
   if (lf === "wan" || lf === "flux" || lf === "sd15") return false;
   return true;
 }
