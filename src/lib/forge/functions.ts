@@ -230,3 +230,31 @@ export const listPromptsFn = createServerFn({ method: "GET" }).handler(async () 
   const { listPrompts, historyLocation } = await import("./history.server");
   return { path: historyLocation(), items: listPrompts(80) };
 });
+
+export const loadTasteFn = createServerFn({ method: "GET" }).handler(async () => {
+  const { readTaste } = await import("./taste.server");
+  return readTaste();
+});
+
+export const voteTasteFn = createServerFn({ method: "POST" })
+  .validator(
+    z.object({
+      id: z.string(),
+      jobId: z.string().optional(),
+      vote: z.enum(["up", "down"]),
+      checkpoint: z.string(),
+      loras: z.array(z.string()),
+      prompt: z.string(),
+      seed: z.number(),
+      reason: z.enum(["deformed", "wrong", "ugly", "other"]).optional(),
+    }),
+  )
+  .handler(async ({ data }) => {
+    const { recordTasteVote } = await import("./taste.server");
+    return recordTasteVote({ ...data, at: Date.now() });
+  });
+
+export const resetTasteFn = createServerFn({ method: "POST" }).handler(async () => {
+  const { resetTaste } = await import("./taste.server");
+  return resetTaste();
+});

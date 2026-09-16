@@ -209,6 +209,7 @@ export type Job = {
   checkpoint?: string;
   progress?: number;
   log?: string;
+  vote?: "up" | "down";
 };
 
 export type Aspect = "1:1" | "16:9" | "9:16" | "3:2" | "2:3" | "4:3" | "3:4" | "21:9";

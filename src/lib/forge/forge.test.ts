@@ -53,6 +53,7 @@ import { isVideoName, mediaMime, withVideoDataUrl } from "./media-mime.ts";
 import { expandPrompt, parseInlineLoras, writePrompt, keepNeutral, userLead, grokExpand, grokMotion, flattenPrompt, withRandomBlocks, recoverScene, isPurpleProse, DEFAULT_WILDCARDS, isAdult, composeNewScene, isShortSubject, sceneCore, tokenOverlap, nsfwWanted } from "./wildcards.ts";
 import { isWashed, nsfwGroup, writeExtreme, writeHorrorSet, writeTabooSet, writeDarkSet, NSFW_TYPES, writeMenus, FACE_BITS, BODY_BITS, CLOTHES_BITS, PLACE_BITS } from "./extreme.ts";
 import { applyArtWrap, applyQualityOffers, qualityWantsHires, randomSceneLine, LOOK_APPENDS } from "./looks.ts";
+import { applyVote, emptyTaste, extraNegFromTaste, ckptScore, sortCkptsByTaste, warnForCheckpoint } from "./taste.ts";
 import { pickBrainModel, cleanBrainOut, brainSystem } from "./brain.ts";
 import { designClipAudio, ensureVoice } from "./clip-sound.ts";
 import { embedWorkflowPng, readPngText, seedFromPngText, seedFromBytes } from "./png.ts";
@@ -1804,5 +1805,103 @@ describe("full regression", () => {
   it("batch size 4 is stored on settings", () => {
     const s = settings({ batchSize: 4 });
     assert.equal(s.batchSize, 4);
+  });
+});
+
+describe("taste votes", () => {
+  it("up then down flips the mix score", () => {
+    let book = emptyTaste();
+    book = applyVote(book, {
+      id: "1",
+      jobId: "j1",
+      at: 1,
+      vote: "up",
+      checkpoint: "AliceXL.safetensors",
+      loras: ["alice.safetensors"],
+      prompt: "alice",
+      seed: 1,
+    });
+    assert.equal(ckptScore(book, "AliceXL.safetensors"), 1);
+    book = applyVote(book, {
+      id: "2",
+      jobId: "j1",
+      at: 2,
+      vote: "down",
+      checkpoint: "AliceXL.safetensors",
+      loras: ["alice.safetensors"],
+      prompt: "alice",
+      seed: 1,
+      reason: "deformed",
+    });
+    assert.equal(ckptScore(book, "AliceXL.safetensors"), -1);
+  });
+  it("two deformed downs add extra negative", () => {
+    let book = emptyTaste();
+    book = applyVote(book, {
+      id: "a",
+      at: 1,
+      vote: "down",
+      checkpoint: "x.safetensors",
+      loras: [],
+      prompt: "a",
+      seed: 1,
+      reason: "deformed",
+    });
+    book = applyVote(book, {
+      id: "b",
+      at: 2,
+      vote: "down",
+      checkpoint: "x.safetensors",
+      loras: [],
+      prompt: "b",
+      seed: 2,
+      reason: "deformed",
+    });
+    assert.match(extraNegFromTaste(book), /extra fingers/);
+  });
+  it("sorts liked mixes first, keeps current pinned", () => {
+    let book = emptyTaste();
+    book = applyVote(book, {
+      id: "a",
+      at: 1,
+      vote: "up",
+      checkpoint: "good.safetensors",
+      loras: [],
+      prompt: "a",
+      seed: 1,
+    });
+    book = applyVote(book, {
+      id: "b",
+      at: 2,
+      vote: "down",
+      checkpoint: "bad.safetensors",
+      loras: [],
+      prompt: "b",
+      seed: 2,
+    });
+    book = applyVote(book, {
+      id: "c",
+      jobId: "c",
+      at: 3,
+      vote: "down",
+      checkpoint: "bad.safetensors",
+      loras: [],
+      prompt: "c",
+      seed: 3,
+    });
+    book = applyVote(book, {
+      id: "d",
+      jobId: "d",
+      at: 4,
+      vote: "down",
+      checkpoint: "bad.safetensors",
+      loras: [],
+      prompt: "d",
+      seed: 4,
+    });
+    const names = sortCkptsByTaste(["bad.safetensors", "mid.safetensors", "good.safetensors"], book, "mid.safetensors");
+    assert.equal(names[0], "mid.safetensors");
+    assert.equal(names[1], "good.safetensors");
+    assert.match(warnForCheckpoint(book, "bad.safetensors"), /thumbs down/i);
   });
 });

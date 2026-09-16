@@ -11,6 +11,8 @@ import {
   Unlock,
   Volume2,
   Heart,
+  ThumbsUp,
+  ThumbsDown,
   Images,
   FolderOpen,
   X,
@@ -37,7 +39,8 @@ import { Textarea } from "@/components/ui/input";
 import { QrMark } from "@/components/forge/qr-mark";
 import { browserPoll, browserQueue, browserTag, lanProbe, lanQueue, lanGenerate, lanBrain, lanBrainStatus, asDataUrl } from "@/lib/forge/comfy-browser";
 import { addClipSound, fetchLive, fetchRecent, forgetForgeOnThisDevice, isLanRemote, mergeLiveJobs, pushLive } from "@/lib/forge/live-room";
-import { lanInfoFn, pollComfyFn, probeComfyFn, queueComfyFn, expandDiskWildcardsFn, peekWildcardFn, tagWithWd14Fn, listWorkflowsFn, queueSavedWorkflowFn, probeOllamaFn, writeLlmIdeasFn, listComfyRecentFn, shredComfyFn, comfyMediaFn, writeStoryFn, appendPromptFn, listPromptsFn } from "@/lib/forge/functions";
+import { lanInfoFn, pollComfyFn, probeComfyFn, queueComfyFn, expandDiskWildcardsFn, peekWildcardFn, tagWithWd14Fn, listWorkflowsFn, queueSavedWorkflowFn, probeOllamaFn, writeLlmIdeasFn, listComfyRecentFn, shredComfyFn, comfyMediaFn, writeStoryFn, appendPromptFn, listPromptsFn, loadTasteFn, voteTasteFn, resetTasteFn } from "@/lib/forge/functions";
+import { extraNegFromTaste, emptyTaste, loraScore, sortCkptsByTaste, tasteLabel, tasteSummary, warnForCheckpoint, type TasteBook, type TasteReason } from "@/lib/forge/taste";
 import { extractFrame, scanFromTags, scanMedia, mergeScan } from "@/lib/forge/detector";
 import { downloadBlob, embedWorkflowPng, dataUrlToBytes, readPngText, seedFromPngText, seedFromBytes } from "@/lib/forge/png";
 import { useForge } from "@/lib/forge/store";
@@ -200,6 +203,8 @@ export function Studio() {
   const [brainOn, setBrainOn] = useState(false);
   const [brainModel, setBrainModel] = useState("");
   const [brainBusy, setBrainBusy] = useState(false);
+  const [taste, setTaste] = useState<TasteBook>(emptyTaste);
+  const [downAsk, setDownAsk] = useState(false);
   const [queueBanner, setQueueBanner] = useState("");
   const [typeQ, setTypeQ] = useState("");
   const [showMore, setShowMore] = useState(false);
@@ -281,6 +286,9 @@ export function Studio() {
     }
     void listWorkflowsFn()
       .then(setGraphs)
+      .catch(() => {});
+    void loadTasteFn()
+      .then(setTaste)
       .catch(() => {});
     let stop = false;
     async function tick() {
@@ -950,6 +958,44 @@ export function Studio() {
       return [{ id: uid(), src, prompt: useForge.getState().prompt, seed: useForge.getState().seed }, ...prev].slice(0, 16);
     });
     toast.success("Liked — Continue when you want the next beat");
+  }
+
+  async function voteStill(side: "up" | "down", reason?: TasteReason) {
+    const job = active;
+    if (!stageSrc && !job?.resultDataUrl) return;
+    const nextSide = job?.vote === side ? undefined : side;
+    if (job) useForge.getState().patchJob(job.id, { vote: nextSide });
+    try {
+      const book = await voteTasteFn({
+        data: {
+          id: uid(),
+          jobId: job?.id,
+          vote: side,
+          checkpoint: job?.checkpoint || settings.checkpoint,
+          loras: useForge
+            .getState()
+            .loras.filter((l) => l.enabled)
+            .map((l) => l.filename),
+          prompt: (job?.expandedPrompt || job?.prompt || useForge.getState().prompt).slice(0, 500),
+          seed: job?.seed ?? useForge.getState().seed,
+          reason: side === "down" ? reason || "other" : undefined,
+        },
+      });
+      setTaste(book);
+    } catch {
+      /* local still marked */
+    }
+    if (side === "down" && nextSide === "down" && !reason) setDownAsk(true);
+    else setDownAsk(false);
+    logForge(
+      "info",
+      "Taste",
+      nextSide === "up"
+        ? "Thumbs up — Forge leans this mix next time"
+        : nextSide === "down"
+          ? `Thumbs down${reason ? ` · ${reason}` : ""} — Forge steers off this mix`
+          : "Vote cleared",
+    );
   }
 
   function continueThisStill(fromSrc?: string) {
@@ -1814,12 +1860,19 @@ export function Studio() {
       );
       return;
     }
-    const neg = generateNegative(
-      useForge.getState().negative,
-      useForge.getState().settings.checkpoint,
-      userPrompt,
-      useForge.getState().negLocked,
-    );
+    const neg = (() => {
+      const base = generateNegative(
+        useForge.getState().negative,
+        useForge.getState().settings.checkpoint,
+        userPrompt,
+        useForge.getState().negLocked,
+      );
+      if (useForge.getState().negLocked) return base;
+      const extra = extraNegFromTaste(taste);
+      if (!extra) return base;
+      if (base.toLowerCase().includes("extra fingers")) return base;
+      return base ? `${base}, ${extra}` : extra;
+    })();
     if (!runMeta.video && state.settings.stillLoader === "checkpoint") {
       const resolved = resolveCkpt(state.settings.checkpoint, useForge.getState().comfy?.checkpoints ?? []);
       if (!resolved) {
@@ -1876,6 +1929,7 @@ export function Studio() {
       fam,
       loraCkpt,
     );
+    picked.ok = picked.ok.filter((l) => loraScore(taste, l.filename) >= -2);
     const match = { ok: picked.ok, blocked: picked.blocked, family: fam };
     for (const l of picked.dropped) {
       useForge.getState().upsertLora({ ...l, enabled: false });
@@ -2065,6 +2119,8 @@ export function Studio() {
           : `Queued on this PC's Comfy · ${MODE_META[runMode].label}`,
       );
       logForge("info", "Generate", `${MODE_META[runMode].label} · ${settingsNow.checkpoint} · ${finalPrompt.slice(0, 200)}`);
+      const hint = warnForCheckpoint(taste, settingsNow.checkpoint);
+      if (hint) logForge("warn", "Taste", hint);
       void appendPromptFn({
         data: {
           mode: runMode,
@@ -2176,14 +2232,14 @@ export function Studio() {
     if (cur && !uniq.some((n) => n === cur || n.replace(/\\/g, "/").split("/").pop() === cur.replace(/\\/g, "/").split("/").pop())) {
       uniq.unshift(cur);
     }
-    return uniq;
+    return sortCkptsByTaste(uniq, taste, cur);
   })();
 
   return (
     <div className="flex min-h-dvh flex-col bg-bg pb-8 text-fg">
       <header className="flex flex-wrap items-center gap-2 px-3 py-3 md:gap-3 md:px-6">
         <p className="text-[15px] font-medium tracking-tight">Forge</p>
-        <span className="text-[11px] tabular-nums text-subtle">207</span>
+        <span className="text-[11px] tabular-nums text-subtle">208</span>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {meta.video ? (
             <select
@@ -2228,6 +2284,7 @@ export function Studio() {
               {listedCkpts.map((n) => (
                 <option key={n} value={n}>
                   {n.split("/").pop()} · {guessArch(n) === "sd15" ? "1.5" : guessArch(n) === "flux" ? "Flux" : "XL"}
+                  {tasteLabel(taste, n)}
                 </option>
               ))}
             </select>
@@ -2934,6 +2991,26 @@ export function Studio() {
               <Button size="icon" variant="secondary" className="size-10 rounded-full" onClick={likeThisStill} aria-label="Like">
                 <Heart />
               </Button>
+              <Button
+                size="icon"
+                variant={active?.vote === "up" ? "default" : "secondary"}
+                className="size-10 rounded-full"
+                onClick={() => void voteStill("up")}
+                aria-label="Thumbs up — good still"
+                title="Good. Forge leans this mix."
+              >
+                <ThumbsUp />
+              </Button>
+              <Button
+                size="icon"
+                variant={active?.vote === "down" ? "default" : "secondary"}
+                className="size-10 rounded-full"
+                onClick={() => void voteStill("down")}
+                aria-label="Thumbs down — bad still"
+                title="Bad. Forge steers off this mix."
+              >
+                <ThumbsDown />
+              </Button>
               <Button size="icon" variant="secondary" className="size-10 rounded-full" onClick={() => void deleteThisStill()} aria-label="Shred">
                 <Trash2 />
               </Button>
@@ -2944,6 +3021,21 @@ export function Studio() {
             </Button>
           )}
           </div>
+          {downAsk ? (
+            <div className="forge-hover-bar pointer-events-auto mt-2">
+              {(["deformed", "wrong", "ugly", "other"] as const).map((r) => (
+                <Button
+                  key={r}
+                  size="sm"
+                  variant="secondary"
+                  className="rounded-full"
+                  onClick={() => void voteStill("down", r)}
+                >
+                  {r === "deformed" ? "Deformed" : r === "wrong" ? "Wrong look" : r === "ugly" ? "Ugly" : "Other"}
+                </Button>
+              ))}
+            </div>
+          ) : null}
         </div>
         <input
           ref={filePickRef}
@@ -4120,7 +4212,17 @@ export function Studio() {
 
       <Sheet open={sheet === "settings"} onOpenChange={(o) => !o && setSheet(null)}>
         <SheetContent title="Settings" side="right">
-          <SettingsForm urls={lanUrls} llm={llm} onOpen={(s) => setSheet(s)} />
+          <SettingsForm
+            urls={lanUrls}
+            llm={llm}
+            onOpen={(s) => setSheet(s)}
+            taste={taste}
+            onResetTaste={() => {
+              void resetTasteFn()
+                .then(setTaste)
+                .catch(() => setTaste(emptyTaste()));
+            }}
+          />
         </SheetContent>
       </Sheet>
       <Sheet open={sheet === "loras"} onOpenChange={(o) => !o && setSheet(null)}>
@@ -4265,6 +4367,22 @@ export function Studio() {
                 Play
               </Button>
             ) : null}
+            <Button
+              size="sm"
+              variant={active?.vote === "up" ? "default" : "secondary"}
+              onClick={() => void voteStill("up")}
+            >
+              <ThumbsUp />
+              Good
+            </Button>
+            <Button
+              size="sm"
+              variant={active?.vote === "down" ? "default" : "secondary"}
+              onClick={() => void voteStill("down")}
+            >
+              <ThumbsDown />
+              Bad
+            </Button>
             <Button size="sm" variant="secondary" onClick={() => void deleteThisStill(zoom.src)}>
               <Trash2 />
               Shred
@@ -5023,10 +5141,14 @@ function SettingsForm({
   urls,
   llm,
   onOpen,
+  taste,
+  onResetTaste,
 }: {
   urls: string[];
   llm: { ok: boolean; models: string[]; message: string };
   onOpen: (s: "story" | "history" | "graph") => void;
+  taste: TasteBook;
+  onResetTaste: () => void;
 }) {
   const settings = useForge((s) => s.settings);
   const nsfwMode = useForge((s) => s.nsfwMode);
@@ -5068,6 +5190,25 @@ function SettingsForm({
             Clear last 40
           </Button>
         </div>
+      </div>
+      <div>
+        <Label>Thumbs</Label>
+        <p className="mt-1 text-xs text-subtle">
+          Thumbs up / down on a still. Forge remembers on this PC (phone votes count). It leans mixes you like and steers off mixes you dump. It does not retrain the AI.
+        </p>
+        <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+          <div className="rounded-xl bg-raised px-3 py-2">
+            <p className="text-[10px] uppercase tracking-wide text-muted">Up</p>
+            <p className="text-lg tabular-nums text-fg">{tasteSummary(taste).up}</p>
+          </div>
+          <div className="rounded-xl bg-raised px-3 py-2">
+            <p className="text-[10px] uppercase tracking-wide text-muted">Down</p>
+            <p className="text-lg tabular-nums text-fg">{tasteSummary(taste).down}</p>
+          </div>
+        </div>
+        <Button size="sm" variant="secondary" className="mt-2" onClick={onResetTaste}>
+          Forget thumbs
+        </Button>
       </div>
       <div>
         <Label>Content</Label>
