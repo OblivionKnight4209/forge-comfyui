@@ -50,10 +50,17 @@ export function applyVote(book: TasteBook, vote: TasteVote): TasteBook {
     bump(next.ckpt, ck, side, n);
     for (const l of vote.loras) bump(next.lora, stem(l), side, n);
   };
-  if (prev === vote.vote) {
+  if (prev === vote.vote && !(vote.vote === "down" && vote.reason)) {
     apply(prev, -1);
     if (jobKey) delete next.byJob[jobKey];
     next.votes = next.votes.filter((v) => (v.jobId || v.id) !== jobKey);
+    return next;
+  }
+  if (prev === vote.vote && vote.reason) {
+    if (vote.vote === "down") {
+      next.reasons[vote.reason] = (next.reasons[vote.reason] || 0) + 1;
+    }
+    next.votes = [vote, ...next.votes.filter((v) => (v.jobId || v.id) !== jobKey)].slice(0, 400);
     return next;
   }
   if (prev) apply(prev, -1);

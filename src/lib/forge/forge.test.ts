@@ -2169,6 +2169,33 @@ describe("taste votes", () => {
     });
     assert.equal(ckptScore(book, "AliceXL.safetensors"), -1);
   });
+  it("down then a reason keeps the down (does not clear)", () => {
+    let book = emptyTaste();
+    book = applyVote(book, {
+      id: "1",
+      jobId: "j9",
+      at: 1,
+      vote: "down",
+      checkpoint: "x.safetensors",
+      loras: [],
+      prompt: "a",
+      seed: 1,
+    });
+    book = applyVote(book, {
+      id: "2",
+      jobId: "j9",
+      at: 2,
+      vote: "down",
+      checkpoint: "x.safetensors",
+      loras: [],
+      prompt: "a",
+      seed: 1,
+      reason: "deformed",
+    });
+    assert.equal(book.byJob.j9, "down");
+    assert.equal(ckptScore(book, "x.safetensors"), -1);
+    assert.equal(book.reasons.deformed, 1);
+  });
   it("two deformed downs add extra negative", () => {
     let book = emptyTaste();
     book = applyVote(book, {

@@ -40,7 +40,7 @@ import { QrMark } from "@/components/forge/qr-mark";
 import { browserPoll, browserQueue, browserTag, lanProbe, lanQueue, lanGenerate, lanBrain, lanBrainStatus, asDataUrl } from "@/lib/forge/comfy-browser";
 import { addClipSound, concatClips, fetchLive, fetchRecent, forgetForgeOnThisDevice, isLanRemote, lastFrameOf, mergeLiveJobs, pushLive } from "@/lib/forge/live-room";
 import { lanInfoFn, pollComfyFn, probeComfyFn, queueComfyFn, expandDiskWildcardsFn, peekWildcardFn, tagWithWd14Fn, listWorkflowsFn, queueSavedWorkflowFn, probeOllamaFn, writeLlmIdeasFn, listComfyRecentFn, shredComfyFn, comfyMediaFn, writeStoryFn, appendPromptFn, listPromptsFn, loadTasteFn, voteTasteFn, resetTasteFn } from "@/lib/forge/functions";
-import { extraNegFromTaste, emptyTaste, loraScore, sortCkptsByTaste, tasteLabel, tasteSummary, warnForCheckpoint, type TasteBook, type TasteReason } from "@/lib/forge/taste";
+import { extraNegFromTaste, emptyTaste, applyVote, loraScore, sortCkptsByTaste, tasteLabel, tasteSummary, warnForCheckpoint, type TasteBook, type TasteReason } from "@/lib/forge/taste";
 import { extractFrame, scanFromTags, scanMedia, mergeScan, combineFromScans } from "@/lib/forge/detector";
 import { downloadBlob, embedWorkflowPng, dataUrlToBytes, readPngText, seedFromPngText, seedFromBytes } from "@/lib/forge/png";
 import { useForge } from "@/lib/forge/store";
@@ -1100,40 +1100,49 @@ export function Studio() {
     toast.success("Liked — Continue when you want the next beat");
   }
 
-  async function voteStill(side: "up" | "down", reason?: TasteReason) {
-    const job = active;
-    if (!stageSrc && !job?.resultDataUrl) return;
-    const nextSide = job?.vote === side ? undefined : side;
+  async function voteStill(side: "up" | "down", reason?: TasteReason, jobArg?: Job) {
+    const src = zoom?.src || stageSrc || jobArg?.resultDataUrl || active?.resultDataUrl;
+    const job =
+      jobArg ||
+      active ||
+      useForge.getState().jobs.find((j) => j.resultDataUrl && (j.resultDataUrl === src || j.id === active?.id));
+    if (!job && !src) {
+      logForge("warn", "Taste", "Generate a still first, then thumbs.");
+      toast.error("Generate a still first, then thumbs.");
+      return;
+    }
+    const keepDown = side === "down" && Boolean(reason);
+    const nextSide: "up" | "down" | undefined = keepDown ? "down" : job?.vote === side ? undefined : side;
     if (job) useForge.getState().patchJob(job.id, { vote: nextSide });
+    const payload = {
+      id: uid(),
+      jobId: job?.id,
+      vote: side,
+      checkpoint: job?.checkpoint || useForge.getState().settings.checkpoint || "",
+      loras: useForge
+        .getState()
+        .loras.filter((l) => l.enabled)
+        .map((l) => l.filename),
+      prompt: (job?.expandedPrompt || job?.prompt || useForge.getState().prompt).slice(0, 500),
+      seed: job?.seed ?? useForge.getState().seed,
+      reason: side === "down" && reason ? reason : undefined,
+    };
     try {
-      const book = await voteTasteFn({
-        data: {
-          id: uid(),
-          jobId: job?.id,
-          vote: side,
-          checkpoint: job?.checkpoint || settings.checkpoint,
-          loras: useForge
-            .getState()
-            .loras.filter((l) => l.enabled)
-            .map((l) => l.filename),
-          prompt: (job?.expandedPrompt || job?.prompt || useForge.getState().prompt).slice(0, 500),
-          seed: job?.seed ?? useForge.getState().seed,
-          reason: side === "down" ? reason || "other" : undefined,
-        },
-      });
+      const book = await voteTasteFn({ data: payload });
       setTaste(book);
     } catch {
-      /* local still marked */
+      setTaste((t) => applyVote(t || emptyTaste(), { ...payload, at: Date.now() }));
+      logForge("warn", "Taste", "PC taste file missed — vote kept on this page.");
     }
     if (side === "down" && nextSide === "down" && !reason) setDownAsk(true);
-    else setDownAsk(false);
+    else if (reason || nextSide !== "down") setDownAsk(false);
     logForge(
       "info",
       "Taste",
       nextSide === "up"
         ? "Thumbs up — Forge leans this mix next time"
         : nextSide === "down"
-          ? `Thumbs down${reason ? ` · ${reason}` : ""} — Forge steers off this mix`
+          ? `Thumbs down${reason ? ` · ${reason}` : " · pick why"} — Forge steers off this mix`
           : "Vote cleared",
     );
   }
@@ -2737,7 +2746,7 @@ export function Studio() {
     <div className="flex min-h-dvh flex-col overflow-x-hidden bg-bg pb-8 text-fg">
       <header className="flex flex-wrap items-center gap-2 px-3 py-3 md:gap-3 md:px-6">
         <p className="text-[15px] font-medium tracking-tight">Forge</p>
-        <span className="text-[11px] tabular-nums text-subtle">247</span>
+        <span className="text-[11px] tabular-nums text-subtle">248</span>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {meta.video ? (
             <select
@@ -3676,7 +3685,8 @@ export function Studio() {
           )}
           </div>
           {downAsk ? (
-            <div className="forge-hover-bar pointer-events-auto mt-2">
+            <div className="pointer-events-auto mt-2 flex flex-wrap justify-center gap-1 rounded-2xl bg-bg/90 px-2 py-2 shadow-lg">
+              <p className="w-full text-center text-[11px] text-muted">Why thumbs down?</p>
               {(["deformed", "wrong", "ugly", "other"] as const).map((r) => (
                 <Button
                   key={r}
@@ -3906,6 +3916,28 @@ export function Studio() {
                     }}
                   >
                     Remake
+                  </button>
+                  <button
+                    type="button"
+                    className={cn("rounded-md px-1 py-1", job.vote === "up" ? "bg-accent text-accent-fg" : "bg-raised text-fg")}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void voteStill("up", undefined, job);
+                    }}
+                    title="Good mix"
+                  >
+                    <ThumbsUp className="size-3" />
+                  </button>
+                  <button
+                    type="button"
+                    className={cn("rounded-md px-1 py-1", job.vote === "down" ? "bg-accent text-accent-fg" : "bg-raised text-fg")}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void voteStill("down", undefined, job);
+                    }}
+                    title="Bad mix"
+                  >
+                    <ThumbsDown className="size-3" />
                   </button>
                 </div>
               </div>
