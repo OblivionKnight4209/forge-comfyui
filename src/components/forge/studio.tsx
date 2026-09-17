@@ -1529,28 +1529,17 @@ export function Studio() {
     const first = locals.find((t) => t && t !== core && t.length > core.length + 8) || locals[0] || core;
     skipIdeaRefresh.current = true;
     setDock("write");
-    const keepBox = !isShortSubject(line) && line.split(/\s+/).length > 12;
     if (tab === "comic") {
       const script = formatComicScript(core, comicLayout, { nsfw: state.nsfwMode, seed });
-      if (keepBox || isPanelScript(line)) {
-        setIdeas([script]);
-        logForge("info", "Creator", "New page beats — tap one to use. Box left as-is.");
-        return true;
-      }
       state.setPrompt(script);
       setIdeas([script]);
       logForge("info", "Creator", `Comic beats for “${core.slice(0, 40)}”`);
       return true;
     }
-    if (keepBox) {
-      setIdeas(locals.filter(Boolean).slice(0, 3));
-      logForge("info", "Creator", "New takes — tap one to put it in the box");
-    } else {
-      state.setPrompt(first);
-      if (state.mode === "ref2i") state.setRefPrompt(first);
-      setIdeas(locals.filter(Boolean).slice(0, 3));
-      logForge("info", "Creator", `Filled “${core.slice(0, 40)}”`);
-    }
+    state.setPrompt(first);
+    if (state.mode === "ref2i") state.setRefPrompt(first);
+    setIdeas(locals.filter((t) => t && t !== first).slice(0, 3));
+    logForge("info", "Creator", `New take for “${core.slice(0, 40)}”`);
     setBrainBusy(true);
     try {
       const r = await lanBrain({
@@ -1558,7 +1547,7 @@ export function Studio() {
         flavor: flavor || (state.nsfwMode ? "sex" : undefined),
         wrap: state.artWrap,
         checkpoint: state.settings.checkpoint,
-        fresh: keepBox,
+        fresh: true,
         seed,
         nsfwMode: state.nsfwMode,
         cast: enabledCastBios(state.loras).join("\n"),
@@ -2773,7 +2762,7 @@ export function Studio() {
     <div className="flex min-h-dvh flex-col overflow-x-hidden bg-bg pb-8 text-fg">
       <header className="flex flex-wrap items-center gap-2 px-3 py-3 md:gap-3 md:px-6">
         <p className="text-[15px] font-medium tracking-tight">Forge</p>
-        <span className="text-[11px] tabular-nums text-subtle">249</span>
+        <span className="text-[11px] tabular-nums text-subtle">250</span>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {meta.video ? (
             <select

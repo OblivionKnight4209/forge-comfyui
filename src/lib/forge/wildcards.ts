@@ -66,52 +66,83 @@ export function recoverScene(text: string): string {
   return bits.length ? bits.join(", ") : userLead(t).split(",").slice(0, 4).join(",").trim();
 }
 
+function rotateList(arr: string[], rng: () => number): string[] {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    const t = a[i]!;
+    a[i] = a[j]!;
+    a[j] = t;
+  }
+  return a;
+}
+
+function braceOf(opts: string[], rng: () => number): string {
+  const list = rotateList(opts.filter(Boolean), rng);
+  return `{${list.join("|")}}`;
+}
+
 /** Perchance curly lists. Generate picks one. Does not dump sex unless asked. */
-export function withRandomBlocks(lead: string, nsfw = false): string {
-  const t = (lead || "").replace(/\s+/g, " ").trim();
+export function withRandomBlocks(lead: string, nsfw = false, rng: () => number = Math.random): string {
+  const stripped = (lead || "")
+    .replace(/\{[^{}]*\}/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const t = (sceneCore(stripped) || userLead(stripped) || stripped).replace(/\s+/g, " ").trim();
   if (!t) return t;
-  if (/\{/.test(t)) return t;
   const c = lookCast(t);
-  const shot = "{full body|three-quarter view|low angle|eye level close-up|over-the-shoulder}";
-  const light = "{warm daylight|overcast sky|golden hour rim light|cool moonlight|neon night|soft window light}";
+  const shot = braceOf(
+    ["full body", "three-quarter view", "low angle", "eye level close-up", "over-the-shoulder", "wide establishing", "dutch angle"],
+    rng,
+  );
+  const light = braceOf(
+    ["warm daylight", "overcast sky", "golden hour rim light", "cool moonlight", "neon night", "soft window light", "storm flash", "firelight"],
+    rng,
+  );
   const vibe = nsfw
-    ? "{highly eroticized yet sharp|bold and explicit|opulent and sensual}"
-    : "{cinematic and grounded|quiet and tense|vivid and clean}";
+    ? braceOf(["highly eroticized yet sharp", "bold and explicit", "opulent and sensual", "raw and messy"], rng)
+    : braceOf(["cinematic and grounded", "quiet and tense", "vivid and clean", "gritty and wet"], rng);
   if (c.animals.length) {
     const bits = c.animals.map((a) => {
-      if (a === "cat") return "{an orange tabby|a black shorthair|a grey street cat} with {arched spine|a low crouch}, {slit pupils|bared fangs}";
-      if (a === "dog") return "{a stocky brown mutt|a brindle dog|a white-chested mutt} with {hackles up|heavy paws}, {bared teeth|wet jowls}";
-      if (a === "husky") return "{a black-and-white husky|a grey agouti husky} with ice-blue eyes, {gathered to spring|shoulders down}";
+      if (a === "cat")
+        return `${braceOf(["an orange tabby", "a black shorthair", "a grey street cat", "a scarred tom"], rng)} with ${braceOf(["arched spine", "a low crouch", "hackles up"], rng)}, ${braceOf(["slit pupils", "bared fangs", "wet whiskers"], rng)}`;
+      if (a === "dog")
+        return `${braceOf(["a stocky brown mutt", "a brindle dog", "a white-chested mutt"], rng)} with ${braceOf(["hackles up", "heavy paws", "a stiff tail"], rng)}, ${braceOf(["bared teeth", "wet jowls"], rng)}`;
+      if (a === "husky")
+        return `${braceOf(["a black-and-white husky", "a grey agouti husky"], rng)} with ice-blue eyes, ${braceOf(["gathered to spring", "shoulders down"], rng)}`;
       return `{an adult ${a}}`;
     });
     const place = c.fight
-      ? "{a dirt yard|a wet alley|a keep courtyard|a rubble lot}"
-      : "{a frozen street|a wet alley|a field at dusk}";
-    return `{a sharp|a lush|a high-fidelity} ${shot} of ${t}. ${bits.join(". ")}. Setting: ${place}, ${light}. ${vibe}. detailed fur, detailed paws.`;
+      ? braceOf(["a dirt yard", "a wet alley", "a keep courtyard", "a rubble lot", "a torch-lit street"], rng)
+      : braceOf(["a frozen street", "a wet alley", "a field at dusk", "a market square"], rng);
+    return `${braceOf(["a sharp", "a lush", "a high-fidelity"], rng)} ${shot} of ${t}. ${bits.join(". ")}. Setting: ${place}, ${light}. ${vibe}. detailed fur, detailed paws.`;
   }
-  const hair = "{long black hair to the waist|silver hair in a high tail|auburn hair in loose waves|short dark hair|wind-swept messy hair}";
-  const eyes = "{brown eyes|green eyes|grey eyes|amber eyes|violet eyes}";
+  const hair = braceOf(
+    ["long black hair to the waist", "silver hair in a high tail", "auburn hair in loose waves", "short dark hair", "wind-swept messy hair", "pink twin tails", "a white braid"],
+    rng,
+  );
+  const eyes = braceOf(["brown eyes", "green eyes", "grey eyes", "amber eyes", "violet eyes", "gold eyes"], rng);
   const body = nsfw
-    ? "{soft stomach, full hips, strong thighs|athletic waist, long legs|lush curves, flushed skin}"
-    : "{adult proportions, long legs|compact athletic build|soft stomach, full hips}";
+    ? braceOf(["soft stomach, full hips, strong thighs", "athletic waist, long legs", "lush curves, flushed skin"], rng)
+    : braceOf(["adult proportions, long legs", "compact athletic build", "soft stomach, full hips"], rng);
   const clothes = nsfw
-    ? "{sheer silk that barely covers her|torn clothes hanging off one shoulder|barely-there lace|an open shirt and nothing else}"
-    : "{a worn jacket over a simple shirt|a knit sweater and skirt|travel cloak and boots|practical street clothes}";
+    ? braceOf(["sheer silk that barely covers her", "torn clothes hanging off one shoulder", "barely-there lace", "an open shirt and nothing else"], rng)
+    : braceOf(["a worn jacket over a simple shirt", "a knit sweater and skirt", "travel cloak and boots", "practical street clothes", "armor over a tunic"], rng);
   const pose = nsfw
-    ? "{arched back, looking at the viewer|leaning against a wall, one knee bent|sitting on the edge of the bed}"
-    : "{standing grounded, weight on one hip|mid-stride|looking slightly aside}";
+    ? braceOf(["arched back, looking at the viewer", "leaning against a wall, one knee bent", "sitting on the edge of the bed"], rng)
+    : braceOf(["standing grounded, weight on one hip", "mid-stride", "looking slightly aside", "turning toward the camera"], rng);
   const place = c.fight
-    ? "{a dirt yard after rain|a torch-lit street|cracked flagstones}"
+    ? braceOf(["a dirt yard after rain", "a torch-lit street", "cracked flagstones", "a ruined temple"], rng)
     : nsfw
-      ? "{a dim bedroom|a rain-slick alley|a neon loft}"
-      : "{a quiet street|a small kitchen|a rooftop at dusk}";
+      ? braceOf(["a dim bedroom", "a rain-slick alley", "a neon loft", "a bathhouse"], rng)
+      : braceOf(["a quiet street", "a small kitchen", "a rooftop at dusk", "a forest path", "a tavern interior"], rng);
   const magic = c.magical
-    ? " {star-tipped wand raised overhead|heart scepter wand|crystal wand staff}, {frilly minidress|sailor collar and thigh-highs|henshin burst}."
+    ? ` ${braceOf(["star-tipped wand raised overhead", "heart scepter wand", "crystal wand staff"], rng)}, ${braceOf(["frilly minidress", "sailor collar and thigh-highs", "henshin burst"], rng)}.`
     : "";
   const act = isAdult(t) || (nsfw && !c.fight)
-    ? " {She is flushed and explicit|bodies close, uncensored|raw adult scene}."
+    ? ` ${braceOf(["She is flushed and explicit", "bodies close, uncensored", "raw adult scene"], rng)}.`
     : "";
-  return `{a breathtakingly detailed|a lush vivid|a sharp cinematic} ${shot} of ${t}. She has ${hair} and ${eyes}, ${body}, wearing ${clothes}. She is ${pose}.${magic}${act} Setting: ${place}, ${light}. The look is ${vibe}. detailed hands, detailed eyes, detailed skin.`;
+  return `${braceOf(["a sharp cinematic", "a lush vivid", "a detailed still"], rng)} ${shot} of ${t}. She has ${hair} and ${eyes}, ${body}, wearing ${clothes}. She is ${pose}.${magic}${act} Setting: ${place}, ${light}. The look is ${vibe}. detailed hands, detailed eyes, detailed skin.`;
 }
 
 function tooClose(out: string, inn: string) {
@@ -1594,7 +1625,18 @@ export function grokExpand(opts: {
     );
   const subject = forgeFill ? sceneCore(lead) || lead : lead;
   if (opts.roll === "random") {
-    return flattenPrompt(withRandomBlocks(subject, nsfw), opts.seed);
+    const core = sceneCore(subject) || userLead(subject) || subject;
+    let best = "";
+    for (let i = 0; i < 8; i++) {
+      const rng = mulberry32((opts.seed + i * 97) >>> 0);
+      const blocks = withRandomBlocks(core, nsfw, rng);
+      const flat = flattenPrompt(blocks, opts.seed + i * 97);
+      best = flat;
+      if (!tooClose(flat, subject) && !tooClose(flat, raw) && flat.split(/\s+/).length > Math.min(18, core.split(/\s+/).length + 6)) {
+        return flat;
+      }
+    }
+    return best || flattenPrompt(withRandomBlocks(core, nsfw, mulberry32(opts.seed + 3)), opts.seed + 3);
   }
   if (/\{[^{}|]+\|/.test(wild)) {
     const flat = flattenPrompt(wild, opts.seed);

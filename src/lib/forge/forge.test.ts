@@ -1523,6 +1523,27 @@ describe("wildcards extra", () => {
     assert.doesNotMatch(t, /\{|\|/);
     assert.notEqual(t.trim().toLowerCase(), "cat fight a dog");
   });
+  it("random roll changes when the seed changes", () => {
+    const a = grokExpand({
+      typed: "girl in a tavern",
+      files: DEFAULT_WILDCARDS,
+      seed: 11,
+      family: "sdxl",
+      checkpoint: "DasiwaIllustrious.safetensors",
+      roll: "random",
+    });
+    const b = grokExpand({
+      typed: "girl in a tavern",
+      files: DEFAULT_WILDCARDS,
+      seed: 99,
+      family: "sdxl",
+      checkpoint: "DasiwaIllustrious.safetensors",
+      roll: "random",
+    });
+    assert.notEqual(a, b);
+    assert.ok(a.split(/\s+/).length > 12);
+    assert.ok(b.split(/\s+/).length > 12);
+  });
   it("normal mode throws away LLM purple prose", () => {
     const novel =
       "a breathtakingly detailed anime masterpiece of a young woman caught in a moment of raw, cinematic vulnerability, draped in nothing but the remnants of a shredded, translucent silk garment";
