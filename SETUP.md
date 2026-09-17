@@ -91,7 +91,7 @@ Skynet (`192.168.1.165:11434`) is a spare 3B if T1000 Ollama is down.
   custom_nodes/                     WD14, Impact, Easy-Use, VHS, …
   user/default/workflows/           saved graphs (Forge writes here too)
 
-~/forge/                            this app (unzip each new zip here)
+~/forge/                            this app (git clone of main)
 ```
 
 LoRAs that sat in Downloads belong in `models/loras/`. Junk (`.pth` pip files) does **not**.
@@ -122,22 +122,28 @@ cp /tmp/pose-gal/Krea2-Pose-Library-for-EasyUse/samples/*.webp "$EASY/samples/"
 
 ---
 
-## Update Forge (always GitHub)
+## Update Forge (always GitHub `main`)
 
-Repo: https://github.com/OblivionKnight4209/forge-comfyui  
-Releases: https://github.com/OblivionKnight4209/forge-comfyui/releases  
-Latest zip (follows newest tag): https://github.com/OblivionKnight4209/forge-comfyui/releases/latest/download/Forge-offline.zip
+Repo: https://github.com/OblivionKnight4209/forge-comfyui
+
+Do **not** wget `releases/latest/download/Forge-offline.zip`. That asset is still v219 until a Release named v233 exists with a zip on it. Clone ignores that zip and takes `main`.
 
 ```bash
 pkill -f "vite|npm run dev" 2>/dev/null || true
-rm -rf ~/forge && mkdir -p ~/forge
-cd ~/Downloads
-wget -O Forge-offline.zip https://github.com/OblivionKnight4209/forge-comfyui/releases/latest/download/Forge-offline.zip
-unzip -o Forge-offline.zip -d ~/forge
+rm -rf ~/forge
+git clone --depth 1 https://github.com/OblivionKnight4209/forge-comfyui.git ~/forge
 cd ~/forge && chmod +x start-forge.sh && ./start-forge.sh
 ```
 
-Top-left must match the zip version printed by `start-forge.sh`.
+Top-left must match the version printed by `start-forge.sh` (233).
+
+Already have a clone and only want a pull:
+
+```bash
+pkill -f "vite|npm run dev" 2>/dev/null || true
+cd ~/forge && git fetch --depth 1 origin main && git reset --hard origin/main
+chmod +x start-forge.sh && ./start-forge.sh
+```
 
 ---
 
@@ -172,4 +178,4 @@ ollama pull huihui_ai/qwen2.5-abliterate:3b
 ## GitHub
 
 Repo: https://github.com/OblivionKnight4209/forge-comfyui  
-Releases: zip per version (`Forge-offline.zip`). Always use `/releases/latest/download/Forge-offline.zip` so you do not have to change the version number.
+Install from `main` with `git clone`. The Release zip `Forge-offline.zip` stays on v219 until a v233 Release is published with a zip attached.
