@@ -19,6 +19,7 @@ import {
   isCharacterLora,
   characterLabel,
   characterShow,
+  pickVaeName,
   resolveCkpt,
   isWanUnet,
   wanPairOk,
@@ -1160,6 +1161,14 @@ describe("loras", () => {
     assert.equal(loraFitsCheckpoint("Hestia.safetensors", "sd15"), false);
     assert.equal(loraFitsLane("Angelina.safetensors", "chilloutmix.safetensors"), false);
     assert.equal(loraFitsLane("Angelina.safetensors", "AnythingXL_xl.safetensors"), true);
+    assert.equal(
+      pickVaeName("sdxl", { fluxVae: "", wanVae: "" }, ["vae-ft-mse-840000-ema-pruned.safetensors", "sdxl_vae.safetensors"]),
+      "sdxl_vae.safetensors",
+    );
+    assert.equal(
+      pickVaeName("sdxl", { fluxVae: "", wanVae: "" }, ["vae-ft-mse-840000-ema-pruned.safetensors", "wan_2.1_vae.safetensors"]),
+      "",
+    );
   });
   it("injects trigger words once", () => {
     const loras: LoraEntry[] = [
@@ -2069,21 +2078,26 @@ describe("full regression", () => {
     const v = validateApiGraph(g);
     assert.equal(v.length, 0, v.join("; "));
   });
-  it("ref2i stitches 2+ stills", () => {
+  it("ref2i two photos use the first as canvas, no stitch", () => {
+    const g = graph({ mode: "ref2i", imageCount: 2, denoise: 0.58 });
+    assert.equal(classes(g).includes("ImageStitch"), false);
+    assert.ok(classes(g).includes("LoadImage"));
+    assert.ok(classes(g).includes("VAEEncode"));
+    const ks = Object.values(g).filter((n) => n.class_type === "KSampler");
+    assert.equal(ks.length, 1);
+    assert.ok(Number(ks[0]?.inputs.denoise) >= 0.48);
+    assert.ok(Number(ks[0]?.inputs.denoise) <= 0.65);
+  });
+  it("ref2i stitches 3+ stills", () => {
     const g = graph({ mode: "ref2i", imageCount: 3, denoise: 0.76 });
     assert.ok(classes(g).includes("ImageStitch"));
     assert.ok(classes(g).includes("LoadImage"));
     assert.ok(classes(g).includes("VAEEncode"));
   });
-  it("combine uses high denoise so it merges, not smears", () => {
-    const g = graph({ mode: "ref2i", imageCount: 2, denoise: 0.38 });
-    const ks = Object.values(g).filter((n) => n.class_type === "KSampler");
-    assert.ok(ks.length >= 2, "combine needs a merge pass plus a sharpen pass");
-    assert.ok(Number(ks[0]?.inputs.denoise) >= 0.75);
-    assert.ok(combineDenoise(0.38) >= 0.8);
-    assert.ok(combineDenoise(0.9) <= 0.88);
-    const fit = Object.values(g).find((n) => n._meta?.title === "Fit canvas");
-    assert.equal(fit?.inputs.crop, "disabled");
+  it("combine denoise: 2 photos mid, 3+ high", () => {
+    assert.ok(combineDenoise(0.38, 2) >= 0.48 && combineDenoise(0.38, 2) <= 0.65);
+    assert.ok(combineDenoise(0.38, 4) >= 0.75);
+    assert.ok(combineDenoise(0.9, 4) <= 0.88);
   });
   it("1.5 mix does not load XL LoRAs", () => {
     assert.equal(loraFitsLane("alice_xl.safetensors", "CuteKittenMix.safetensors"), false);

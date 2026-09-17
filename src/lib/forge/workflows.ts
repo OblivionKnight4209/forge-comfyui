@@ -278,7 +278,7 @@ function fluxStill(args: BuildArgs): ApiPrompt {
   );
 
   const i2i = args.mode === "i2i" || args.mode === "ref2i";
-  if (args.mode === "ref2i" && args.imageCount >= 2) {
+  if (args.mode === "ref2i" && args.imageCount >= 3) {
     encodeRefCollage(prompt, args.imageCount, w, h, ["3", 0]);
   } else if (i2i) {
     encodeInputStill(prompt, "forge_input_0.png", w, h, ["3", 0], args.inputW ? "disabled" : "center");
@@ -298,7 +298,7 @@ function fluxStill(args: BuildArgs): ApiPrompt {
       cfg: s.cfg,
       sampler_name: s.sampler,
       scheduler: s.scheduler,
-      denoise: i2i ? (args.mode === "ref2i" ? combineDenoise(args.denoise) : args.denoise) : 1,
+      denoise: i2i ? (args.mode === "ref2i" ? combineDenoise(args.denoise, args.imageCount) : args.denoise) : 1,
       model,
       positive: ["12", 0],
       negative: neg,
@@ -347,7 +347,8 @@ function sdxlStill(args: BuildArgs): ApiPrompt {
   let vae: [string, number] = ["1", 2];
   const wantVae = (args.vaeName || "").trim();
   const wanVae = /wan/i.test(wantVae);
-  if (wantVae && !wanVae && (i2i || fluxCkpt || /krea|lumina|hunyuan|sd3|dit/.test((ckpt || "").toLowerCase()))) {
+  const badVae = /vae-ft-mse|kl-f8|sd15|1[\s._-]?5/i.test(wantVae);
+  if (wantVae && !wanVae && !badVae && (i2i || fluxCkpt || /krea|lumina|hunyuan|sd3|dit/.test((ckpt || "").toLowerCase()))) {
     prompt["3"] = node("VAELoader", { vae_name: wantVae }, "VAE");
     vae = ["3", 0];
   }
@@ -358,7 +359,7 @@ function sdxlStill(args: BuildArgs): ApiPrompt {
       "Flux guidance",
     );
   }
-  if (args.mode === "ref2i" && args.imageCount >= 2) {
+  if (args.mode === "ref2i" && args.imageCount >= 3) {
     encodeRefCollage(prompt, args.imageCount, w, h, vae);
     const n = Math.min(8, Math.max(1, s.batchSize || 1));
     if (n > 1) {
@@ -396,7 +397,7 @@ function sdxlStill(args: BuildArgs): ApiPrompt {
       cfg: fluxCkpt ? 1 : s.cfg || (arch === "sd15" ? 7 : 5),
       sampler_name: sampler,
       scheduler,
-      denoise: i2i ? (args.mode === "ref2i" ? combineDenoise(args.denoise) : args.denoise) : 1,
+      denoise: i2i ? (args.mode === "ref2i" ? combineDenoise(args.denoise, args.imageCount) : args.denoise) : 1,
       model,
       positive: fluxCkpt ? ["12", 0] : pos,
       negative: neg,
@@ -406,27 +407,6 @@ function sdxlStill(args: BuildArgs): ApiPrompt {
   );
   prompt["31"] = node("VAEDecode", { samples: ["30", 0], vae }, "Decode");
   let image: [string, number] = ["31", 0];
-  if (args.mode === "ref2i" && !fluxCkpt) {
-    prompt["37"] = node("VAEEncode", { pixels: image, vae }, "Combine re-encode");
-    prompt["38"] = node(
-      "KSampler",
-      {
-        seed: args.seed + 7,
-        steps: Math.max(12, Math.round((s.steps || 28) * 0.45)),
-        cfg: s.cfg || 5,
-        sampler_name: sampler,
-        scheduler,
-        denoise: 0.28,
-        model,
-        positive: pos,
-        negative: neg,
-        latent_image: ["37", 0],
-      },
-      "Combine sharpen",
-    );
-    prompt["39"] = node("VAEDecode", { samples: ["38", 0], vae }, "Combine sharp decode");
-    image = ["39", 0];
-  }
   if (s.hires && !fluxCkpt && !i2i) {
     prompt["33"] = node(
       "ImageScaleBy",
@@ -933,9 +913,13 @@ export function i2iDenoise(denoise: number, structural: boolean) {
   return Math.min(0.38, Math.max(0.28, n));
 }
 
-/** Combine must rewrite the collage into one scene. Low denoise just smears the split. */
-export function combineDenoise(denoise: number) {
-  const n = Number.isFinite(denoise) ? denoise : 0.82;
+/** Two photos: rewrite on the first canvas. Three+: grid, so denoise must be high enough to kill the split. */
+export function combineDenoise(denoise: number, imageCount = 2) {
+  const n = Number.isFinite(denoise) ? denoise : 0.58;
+  if (imageCount <= 2) {
+    if (n < 0.4 || n >= 0.95) return 0.58;
+    return Math.min(0.65, Math.max(0.48, n));
+  }
   if (n < 0.7) return 0.82;
   return Math.min(0.88, Math.max(0.75, n));
 }

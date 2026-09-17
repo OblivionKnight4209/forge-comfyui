@@ -133,7 +133,7 @@ export async function runGenerateIntent(intent: GenerateIntent) {
         ),
       )
     : combining
-      ? combineDenoise(intent.denoise ?? 0.82)
+      ? combineDenoise(intent.denoise ?? 0.58, intent.images?.length || 2)
       : (intent.denoise ?? 0.65);
   const api = buildApiWorkflow({
     mode: intent.mode,

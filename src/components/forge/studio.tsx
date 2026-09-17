@@ -1940,7 +1940,10 @@ export function Studio() {
                 ),
               )
             : runMode === "ref2i"
-              ? combineDenoise(state.denoise)
+              ? combineDenoise(
+                  state.denoise,
+                  state.media.filter((m) => m.kind === "image").length,
+                )
               : state.denoise,
         artWrap: state.artWrap,
         quality: state.qualityPick,
@@ -2418,7 +2421,10 @@ export function Studio() {
       );
       denoiseNow = i2iDenoise(denoiseNow, change);
     } else if (runMode === "ref2i" && tab !== "comic") {
-      denoiseNow = combineDenoise(denoiseNow);
+      denoiseNow = combineDenoise(
+        denoiseNow,
+        useForge.getState().media.filter((m) => m.kind === "image").length,
+      );
     }
     let inW = inputs.find((m) => m.kind === "image")?.width;
     let inH = inputs.find((m) => m.kind === "image")?.height;
@@ -2704,7 +2710,7 @@ export function Studio() {
     <div className="flex min-h-dvh flex-col overflow-x-hidden bg-bg pb-8 text-fg">
       <header className="flex flex-wrap items-center gap-2 px-3 py-3 md:gap-3 md:px-6">
         <p className="text-[15px] font-medium tracking-tight">Forge</p>
-        <span className="text-[11px] tabular-nums text-subtle">244</span>
+        <span className="text-[11px] tabular-nums text-subtle">245</span>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {meta.video ? (
             <select
@@ -3106,11 +3112,7 @@ export function Studio() {
                       draggable
                       className="block w-full cursor-grab active:cursor-grabbing"
                       onDragStart={(e) => dragForgeStill(e, { src, name: f.name, folder: f.folder })}
-                      onClick={() => {
-                        if (libraryReturn === "combine") useLibraryFile(f, "combine");
-                        else if (libraryReturn === "video") useLibraryFile(f, "video");
-                        else useLibraryFile(f, "zoom");
-                      }}
+                      onClick={() => useLibraryFile(f, "zoom")}
                       title={f.name}
                     >
                       {vid ? (

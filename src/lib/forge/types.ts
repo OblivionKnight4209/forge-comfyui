@@ -385,22 +385,22 @@ export function pickControlNet(
 }
 
 export function pickVaeName(family: "flux" | "sdxl" | "sd15", settings: Pick<ComfySettings, "fluxVae" | "wanVae">, vaes: string[]) {
-  const list = vaes.filter((v) => v && !/wan|umt5/i.test(v));
-  const hit = (re: RegExp) => list.find((v) => re.test(v)) || "";
+  const notVideo = vaes.filter((v) => v && !/wan|umt5/i.test(v));
+  const hit = (pool: string[], re: RegExp) => pool.find((v) => re.test(v)) || "";
   if (family === "flux") {
+    const list = notVideo.filter((v) => /ae\.safetensors|flux.*vae/i.test(v));
     return (
-      (settings.fluxVae && list.includes(settings.fluxVae) ? settings.fluxVae : "") ||
-      hit(/ae\.safetensors|flux.*vae/i) ||
-      settings.fluxVae ||
+      (settings.fluxVae && notVideo.includes(settings.fluxVae) ? settings.fluxVae : "") ||
+      hit(list, /ae\.safetensors|flux.*vae/i) ||
       ""
     );
   }
-  if (family === "sd15") return hit(/vae-ft-mse|kl-f8|sd-?vae/i) || list.find((v) => /vae/i.test(v)) || "";
-  return (
-    hit(/sdxl_vae|xlvae|vae-ft-mse|pony.*vae|illustrious.*vae/i) ||
-    list.find((v) => /vae/i.test(v) && !/ae\.safetensors/i.test(v)) ||
-    ""
-  );
+  if (family === "sd15") {
+    const list = notVideo.filter((v) => /vae-ft-mse|kl-f8|sd-?vae|sd15/i.test(v) && !/sdxl|xlvae|pony|illustrious|flux/i.test(v));
+    return hit(list, /vae-ft-mse|kl-f8/i) || list[0] || "";
+  }
+  const xl = notVideo.filter((v) => /sdxl_vae|sdxl.*vae|xlvae|pony.*vae|illustrious.*vae/i.test(v) && !/vae-ft-mse|kl-f8|sd15/i.test(v));
+  return hit(xl, /sdxl_vae|sdxl.*vae/i) || xl[0] || "";
 }
 
 export function isWanUnet(name: string) {
