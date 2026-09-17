@@ -429,7 +429,6 @@ export function Studio() {
     let stop = false;
     async function tick() {
       try {
-        await useForge.persist.rehydrate();
         const status = await lanProbe().catch(() =>
           probeComfyFn({ data: { baseUrl: settings.baseUrl } }),
         );
@@ -2761,7 +2760,7 @@ export function Studio() {
     <div className="flex min-h-dvh flex-col overflow-x-hidden bg-bg pb-8 text-fg">
       <header className="flex flex-wrap items-center gap-2 px-3 py-3 md:gap-3 md:px-6">
         <p className="text-[15px] font-medium tracking-tight">Forge</p>
-        <span className="text-[11px] tabular-nums text-subtle">251</span>
+        <span className="text-[11px] tabular-nums text-subtle">252</span>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {meta.video ? (
             <select
@@ -2852,14 +2851,20 @@ export function Studio() {
           <button
             type="button"
             className={cn("h-8 rounded-full px-2.5 text-xs", !nsfwMode ? "bg-accent text-accent-fg" : "text-subtle")}
-            onClick={() => useForge.getState().setNsfwMode(false)}
+            onClick={() => {
+              useForge.getState().setNsfwMode(false);
+              logForge("info", "Mode", "SFW — clothes and place only. No sex fill.");
+            }}
           >
             SFW
           </button>
           <button
             type="button"
             className={cn("h-8 rounded-full px-2.5 text-xs", nsfwMode ? "bg-accent text-accent-fg" : "text-subtle")}
-            onClick={() => useForge.getState().setNsfwMode(true)}
+            onClick={() => {
+              useForge.getState().setNsfwMode(true);
+              logForge("info", "Mode", "NSFW — explicit uncensored fill for people.");
+            }}
           >
             NSFW
           </button>
@@ -6053,14 +6058,20 @@ function SettingsForm({
           <button
             type="button"
             className={cn("h-9 flex-1 rounded-full text-sm", !nsfwMode ? "bg-bg text-fg" : "text-subtle")}
-            onClick={() => useForge.getState().setNsfwMode(false)}
+            onClick={() => {
+              useForge.getState().setNsfwMode(false);
+              logForge("info", "Mode", "SFW — clothes and place only. No sex fill.");
+            }}
           >
             SFW
           </button>
           <button
             type="button"
             className={cn("h-9 flex-1 rounded-full text-sm", nsfwMode ? "bg-accent text-accent-fg" : "text-subtle")}
-            onClick={() => useForge.getState().setNsfwMode(true)}
+            onClick={() => {
+              useForge.getState().setNsfwMode(true);
+              logForge("info", "Mode", "NSFW — explicit uncensored fill for people.");
+            }}
           >
             NSFW
           </button>

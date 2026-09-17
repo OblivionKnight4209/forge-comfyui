@@ -34,7 +34,7 @@ import {
   type LogEntry,
   type ThemeId,
 } from "./types";
-import { DEFAULT_WILDCARDS } from "./wildcards";
+import { DEFAULT_WILDCARDS, stripAutoNsfw } from "./wildcards";
 
 export const DEFAULT_LORAS: LoraEntry[] = [];
 
@@ -489,7 +489,11 @@ export const useForge = create<ForgeState>()(
           artWrap: next.includes("real") && get().artWrap === "none" ? "photo" : get().artWrap,
         });
       },
-      setNsfwMode: (nsfwMode) => set({ nsfwMode }),
+      setNsfwMode: (nsfwMode) => {
+        const prompt = nsfwMode ? get().prompt : stripAutoNsfw(get().prompt);
+        const refPrompt = nsfwMode ? get().refPrompt : stripAutoNsfw(get().refPrompt);
+        set({ nsfwMode, prompt, refPrompt });
+      },
     }),
     {
       name: "forge-studio-v48",
@@ -546,6 +550,7 @@ export const useForge = create<ForgeState>()(
         ckptStyle: s.ckptStyle,
         artWrap: s.artWrap,
         qualityPick: s.qualityPick,
+        nsfwMode: s.nsfwMode,
         blankStage: s.blankStage,
         jobCount: s.jobCount,
       }),

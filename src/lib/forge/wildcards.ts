@@ -243,9 +243,19 @@ export function isAdult(text: string) {
   return ADULT_RE.test(text);
 }
 
-/** NSFW switch: explicit fill for people. Animals/fights stay non-porn unless the prompt already is. */
+/** Drop auto stamps so SFW Creator is not stuck on a previous NSFW fill. */
+export function stripAutoNsfw(text: string): string {
+  return (text || "")
+    .replace(/\b(uncensored|explicit|nsfw|adult 18\+|18\+|highly eroticized(?: yet sharp)?|bold and explicit|opulent and sensual|raw adult scene)\b/gi, " ")
+    .replace(/\s*,\s*,+/g, ",")
+    .replace(/^,|,$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** NSFW switch: explicit fill for people. SFW never auto-fills sex unless they typed an act. */
 export function nsfwWanted(text: string, nsfwMode = false): boolean {
-  if (wantsSexAct(text) || isAdult(text)) return true;
+  if (wantsSexAct(text)) return true;
   if (!nsfwMode) return false;
   const c = lookCast(text);
   if (c.animals.length && !c.girl && !c.man) return false;
@@ -1611,12 +1621,13 @@ export function grokExpand(opts: {
     isPurpleProse(wild) ||
     (/pores|subsurface scatter|highly detailed anime still/i.test(wild) &&
       /flagstone|keep yard|shield bash/i.test(wild));
-  const lead = dumped ? recoverScene(wild) || userLead(wild) : wild;
+  const leadRaw = dumped ? recoverScene(wild) || userLead(wild) : wild;
   const ckpt = (opts.checkpoint ?? "").toLowerCase();
   const anime =
     opts.family === "sd15" ||
     (/mix|anime|kitten|illustrious|noob|nai|pony/.test(ckpt) && !ckpt.includes("flux"));
-  const nsfwOn = opts.nsfwMode !== false;
+  const nsfwOn = opts.nsfwMode === true;
+  const lead = nsfwOn ? leadRaw : stripAutoNsfw(leadRaw);
   const nsfw = nsfwWanted(lead, nsfwOn);
   const sexAct = wantsSexAct(lead);
   const forgeFill =

@@ -62,7 +62,7 @@ import {
   chunkPrompt,
 } from "./workflows.ts";
 import { isVideoName, mediaMime, withVideoDataUrl } from "./media-mime.ts";
-import { expandPrompt, parseInlineLoras, writePrompt, keepNeutral, userLead, grokExpand, grokMotion, flattenPrompt, withRandomBlocks, recoverScene, isPurpleProse, DEFAULT_WILDCARDS, isAdult, composeNewScene, isShortSubject, sceneCore, tokenOverlap, nsfwWanted } from "./wildcards.ts";
+import { expandPrompt, parseInlineLoras, writePrompt, keepNeutral, userLead, grokExpand, grokMotion, flattenPrompt, withRandomBlocks, recoverScene, isPurpleProse, DEFAULT_WILDCARDS, isAdult, composeNewScene, isShortSubject, sceneCore, tokenOverlap, nsfwWanted, stripAutoNsfw } from "./wildcards.ts";
 import { isWashed, nsfwGroup, writeExtreme, writeHorrorSet, writeTabooSet, writeDarkSet, NSFW_TYPES, writeMenus, FACE_BITS, BODY_BITS, CLOTHES_BITS, PLACE_BITS } from "./extreme.ts";
 import { applyArtWrap, applyQualityOffers, qualityWantsHires, randomSceneLine, LOOK_APPENDS, stripComicPageTalk } from "./looks.ts";
 import { applyVote, emptyTaste, extraNegFromTaste, ckptScore, sortCkptsByTaste, warnForCheckpoint } from "./taste.ts";
@@ -1590,6 +1590,7 @@ describe("wildcards extra", () => {
       seed: 8,
       family: "sdxl",
       checkpoint: "DasiwaIllustrious.safetensors",
+      nsfwMode: true,
     });
     assert.match(t, /anime girl/i);
     assert.match(t, /uncensored|nsfw|explicit/i);
@@ -1665,6 +1666,7 @@ describe("wildcards extra", () => {
       seed: 8,
       family: "sdxl",
       checkpoint: "DasiwaIllustrious.safetensors",
+      nsfwMode: true,
     });
     assert.match(t, /uncensored/i);
     assert.doesNotMatch(t, /tasteful|implied nudity|fade to black/i);
@@ -2341,6 +2343,23 @@ describe("v250 full regression", () => {
   it("NSFW expand stays explicit", () => {
     const t = grokExpand({ typed: "hestia sex in a tavern", files: DEFAULT_WILDCARDS, seed: 7, family: "sdxl", checkpoint: "DasiwaIllustrious.safetensors", nsfwMode: true });
     assert.match(t, /uncensored|explicit|sex|pussy|cock|nude/i);
+  });
+  it("SFW switch ignores leftover uncensored stamps", () => {
+    assert.equal(nsfwWanted("girl in a tavern, uncensored, explicit, nsfw", false), false);
+    assert.equal(nsfwWanted("girl in a tavern", true), true);
+    assert.match(stripAutoNsfw("girl in a tavern, uncensored, explicit, nsfw, adult 18+"), /girl in a tavern/i);
+    assert.doesNotMatch(stripAutoNsfw("girl in a tavern, uncensored, explicit, nsfw"), /\bnsfw\b/i);
+    const t = grokExpand({
+      typed: "girl in a tavern, uncensored, explicit, nsfw, adult 18+",
+      files: DEFAULT_WILDCARDS,
+      seed: 7,
+      family: "sdxl",
+      checkpoint: "DasiwaIllustrious.safetensors",
+      nsfwMode: false,
+    });
+    assert.doesNotMatch(t, /\b(pussy|ahegao|handjob|cock)\b/i);
+    assert.doesNotMatch(t, /uncensored, explicit, nsfw/i);
+    assert.match(t, /girl|tavern/i);
   });
   it("comic 2x2 has four panel beats", () => {
     assert.ok(COMIC_LAYOUTS.length >= 3);
