@@ -63,6 +63,53 @@ function encodeInputStill(
   prompt["21"] = node("VAEEncode", { pixels: ["22", 0], vae }, "Encode");
 }
 
+function scaleRef(
+  prompt: ApiPrompt,
+  i: number,
+  w: number,
+  h: number,
+): [string, number] {
+  const loadId = String(200 + i);
+  const scaleId = String(210 + i);
+  prompt[loadId] = node("LoadImage", { image: `forge_input_${i}.png` }, `Ref ${i + 1}`);
+  prompt[scaleId] = node(
+    "ImageScale",
+    {
+      image: [loadId, 0],
+      width: w,
+      height: h,
+      upscale_method: "lanczos",
+      crop: "center",
+    },
+    `Ref ${i + 1} cell`,
+  );
+  return [scaleId, 0];
+}
+
+function stitchPair(
+  prompt: ApiPrompt,
+  id: string,
+  a: [string, number],
+  b: [string, number],
+  direction: "right" | "down",
+  title: string,
+): [string, number] {
+  prompt[id] = node(
+    "ImageStitch",
+    {
+      image1: a,
+      image2: b,
+      direction,
+      match_image_size: true,
+      spacing_width: 0,
+      spacing_color: "white",
+      extra_padding: 0,
+    },
+    title,
+  );
+  return [id, 0];
+}
+
 function encodeRefCollage(
   prompt: ApiPrompt,
   count: number,
@@ -71,46 +118,30 @@ function encodeRefCollage(
   vae: [string, number],
 ) {
   const n = Math.min(5, Math.max(2, count));
-  const scaled: [string, number][] = [];
-  for (let i = 0; i < n; i++) {
-    const loadId = String(200 + i);
-    const scaleId = String(210 + i);
-    prompt[loadId] = node("LoadImage", { image: `forge_input_${i}.png` }, `Ref ${i + 1}`);
-    prompt[scaleId] = node(
-      "ImageScale",
-      {
-        image: [loadId, 0],
-        width: Math.max(256, Math.floor(w / 2)),
-        height: Math.max(256, Math.floor(h / 2)),
-        upscale_method: "lanczos",
-        crop: "center",
-      },
-      `Ref ${i + 1} size`,
-    );
-    scaled.push([scaleId, 0]);
-  }
-  let cur: [string, number] = scaled[0]!;
-  for (let i = 1; i < scaled.length; i++) {
-    const nid = String(220 + i);
-    prompt[nid] = node(
-      "ImageStitch",
-      {
-        image1: cur,
-        image2: scaled[i],
-        direction: i === 2 ? "down" : "right",
-        match_image_size: true,
-        spacing_width: 0,
-        spacing_color: "white",
-        extra_padding: 0,
-      },
-      `Stitch ${i}`,
-    );
-    cur = [nid, 0];
+  let collage: [string, number];
+  if (n === 2) {
+    const cw = Math.max(640, Math.floor(w / 2));
+    const ch = Math.max(768, h);
+    collage = stitchPair(prompt, "221", scaleRef(prompt, 0, cw, ch), scaleRef(prompt, 1, cw, ch), "right", "Side by side");
+  } else if (n === 3) {
+    const cw = Math.max(512, Math.floor(w / 2));
+    const ch = Math.max(512, Math.floor(h / 2));
+    const row = stitchPair(prompt, "221", scaleRef(prompt, 0, cw, ch), scaleRef(prompt, 1, cw, ch), "right", "Row 1");
+    collage = stitchPair(prompt, "222", row, scaleRef(prompt, 2, cw * 2, ch), "down", "Add third");
+  } else {
+    const cw = Math.max(512, Math.floor(w / 2));
+    const ch = Math.max(512, Math.floor(h / 2));
+    const r1 = stitchPair(prompt, "221", scaleRef(prompt, 0, cw, ch), scaleRef(prompt, 1, cw, ch), "right", "Row 1");
+    const r2 = stitchPair(prompt, "222", scaleRef(prompt, 2, cw, ch), scaleRef(prompt, 3, cw, ch), "right", "Row 2");
+    collage = stitchPair(prompt, "223", r1, r2, "down", "Grid");
+    if (n >= 5) {
+      collage = stitchPair(prompt, "224", collage, scaleRef(prompt, 4, cw * 2, ch), "down", "Add fifth");
+    }
   }
   prompt["22"] = node(
     "ImageScale",
-    { image: cur, width: w, height: h, upscale_method: "lanczos", crop: "center" },
-    "Collage fit",
+    { image: collage, width: w, height: h, upscale_method: "lanczos", crop: "disabled" },
+    "Fit canvas",
   );
   prompt["21"] = node("VAEEncode", { pixels: ["22", 0], vae }, "Encode refs");
 }
@@ -267,7 +298,7 @@ function fluxStill(args: BuildArgs): ApiPrompt {
       cfg: s.cfg,
       sampler_name: s.sampler,
       scheduler: s.scheduler,
-      denoise: i2i ? args.denoise : 1,
+      denoise: i2i ? (args.mode === "ref2i" ? combineDenoise(args.denoise) : args.denoise) : 1,
       model,
       positive: ["12", 0],
       negative: neg,
@@ -365,7 +396,7 @@ function sdxlStill(args: BuildArgs): ApiPrompt {
       cfg: fluxCkpt ? 1 : s.cfg || (arch === "sd15" ? 7 : 5),
       sampler_name: sampler,
       scheduler,
-      denoise: i2i ? args.denoise : 1,
+      denoise: i2i ? (args.mode === "ref2i" ? combineDenoise(args.denoise) : args.denoise) : 1,
       model,
       positive: fluxCkpt ? ["12", 0] : pos,
       negative: neg,
@@ -375,6 +406,27 @@ function sdxlStill(args: BuildArgs): ApiPrompt {
   );
   prompt["31"] = node("VAEDecode", { samples: ["30", 0], vae }, "Decode");
   let image: [string, number] = ["31", 0];
+  if (args.mode === "ref2i" && !fluxCkpt) {
+    prompt["37"] = node("VAEEncode", { pixels: image, vae }, "Combine re-encode");
+    prompt["38"] = node(
+      "KSampler",
+      {
+        seed: args.seed + 7,
+        steps: Math.max(12, Math.round((s.steps || 28) * 0.45)),
+        cfg: s.cfg || 5,
+        sampler_name: sampler,
+        scheduler,
+        denoise: 0.28,
+        model,
+        positive: pos,
+        negative: neg,
+        latent_image: ["37", 0],
+      },
+      "Combine sharpen",
+    );
+    prompt["39"] = node("VAEDecode", { samples: ["38", 0], vae }, "Combine sharp decode");
+    image = ["39", 0];
+  }
   if (s.hires && !fluxCkpt && !i2i) {
     prompt["33"] = node(
       "ImageScaleBy",
@@ -879,6 +931,13 @@ export function i2iDenoise(denoise: number, structural: boolean) {
   if (n >= 0.95) return structural ? 0.52 : 0.38;
   if (structural) return Math.min(0.52, Math.max(0.40, n));
   return Math.min(0.38, Math.max(0.28, n));
+}
+
+/** Combine must rewrite the collage into one scene. Low denoise just smears the split. */
+export function combineDenoise(denoise: number) {
+  const n = Number.isFinite(denoise) ? denoise : 0.82;
+  if (n < 0.7) return 0.82;
+  return Math.min(0.88, Math.max(0.75, n));
 }
 
 export function validateApiGraph(graph: ApiPrompt): string[] {

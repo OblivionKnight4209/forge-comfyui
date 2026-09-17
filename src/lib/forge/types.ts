@@ -52,7 +52,7 @@ export const MODE_META: Record<
   ref2i: {
     label: "Combine",
     blurb: "Mix 2–5 photos",
-    how: "Tap Combine. Your current still is slot 1. Tap more photos from Results or the library (need 2 to 5). Type the new scene. Generate.",
+    how: "Tap Combine. Slot 1 is the first photo. Add 1–4 more from Library. Type the new scene (who is together, where). Generate writes one photo — not a split.",
     needsImage: true,
     needsVideo: false,
     video: false,

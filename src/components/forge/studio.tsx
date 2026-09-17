@@ -103,6 +103,7 @@ import {
   buildApiWorkflow,
   compatibleLoras,
   i2iDenoise,
+  combineDenoise,
   jobBasename,
   matchNamedLoras,
   pickLorasForPrompt,
@@ -222,6 +223,7 @@ export function Studio() {
   const genLock = useRef(0);
   const lastComfyOk = useRef<boolean | null>(null);
   const [chipTab, setChipTab] = useState<"write" | "types" | "wild">("write");
+  const [stageLane, setStageLane] = useState<"image" | "comic" | "video" | "combine" | null>(null);
   const [writeCat, setWriteCat] = useState("face");
   const [writeQ, setWriteQ] = useState("");
   const [brainOn, setBrainOn] = useState(false);
@@ -674,10 +676,19 @@ export function Studio() {
   const sourceSrc = media[0]?.dataUrl || null;
   const batchStills = !showSource && tab !== "combine" && (active?.batch?.length || 0) > 1 ? active!.batch! : [];
   const focusStill = batchStills[Math.min(batchFocus, Math.max(0, batchStills.length - 1))];
-  const stageSrc = tab === "combine" ? null : showSource && sourceSrc ? sourceSrc : focusStill?.src || lastResult;
   const stageKind = showSource && media[0]
     ? media[0].kind
     : (focusStill?.kind ?? active?.resultKind ?? "image");
+  const showOnThisTab =
+    tab === "comic"
+      ? stageLane === "comic"
+      : tab === "video"
+        ? stageLane === "video" || stageKind === "video"
+        : tab === "image"
+          ? stageLane !== "comic" && stageLane !== "video"
+          : tab !== "combine";
+  const rawStage = tab === "combine" ? null : showSource && sourceSrc ? sourceSrc : focusStill?.src || lastResult;
+  const stageSrc = showOnThisTab ? rawStage : null;
   const scan = active?.scan ?? liveScan;
 
   useEffect(() => {
@@ -1837,7 +1848,9 @@ export function Studio() {
                   userPrompt,
                 ),
               )
-            : state.denoise,
+            : runMode === "ref2i"
+              ? combineDenoise(state.denoise)
+              : state.denoise,
         artWrap: state.artWrap,
         quality: state.qualityPick,
         roll: state.promptRoll,
@@ -1936,6 +1949,7 @@ export function Studio() {
     }
     const state = useForge.getState();
     const photoOn = state.media.some((m) => m.kind === "image");
+    setStageLane(tab === "comic" ? "comic" : tab === "video" || opts?.continueVideo ? "video" : tab === "combine" ? "combine" : "image");
     if (tab === "video" || opts?.continueVideo) {
       useForge.getState().setMode(photoOn ? "i2v" : "t2v");
       useForge.getState().setSoundOn(true);
@@ -2287,16 +2301,18 @@ export function Studio() {
       }
     }
     if (runMode === "ref2i" && tab !== "comic") {
-      finalPrompt = `unified single scene combining the reference photos, not a split collage, not a grid, ${finalPrompt}`;
+      finalPrompt = `one photograph, the people from every reference photo together in the same place, keep their faces, sharp focus, detailed faces, not a collage, not a split screen, not two frames, not a grid, not a diptych, ${finalPrompt}`;
     }
     if (tab === "comic" && runMode === "ref2i") {
       finalPrompt = `arrange the reference photos as panels on one comic page with black gutters, sequential, ${finalPrompt}`;
     }
-    if (runMode === "i2i" || runMode === "ref2i") {
+    if (runMode === "i2i") {
       const change = /\b(remove|undress|take off|strip|add |change |replace |delete |put on|clothes|shirt|dress|nude|naked)\b/i.test(
         userPrompt,
       );
       denoiseNow = i2iDenoise(denoiseNow, change);
+    } else if (runMode === "ref2i" && tab !== "comic") {
+      denoiseNow = combineDenoise(denoiseNow);
     }
     let inW = inputs.find((m) => m.kind === "image")?.width;
     let inH = inputs.find((m) => m.kind === "image")?.height;
@@ -2519,6 +2535,7 @@ export function Studio() {
     if (now - genLock.current < 400) return;
     genLock.current = now;
     setQueueBanner("");
+    setStageLane(tab === "comic" ? "comic" : tab === "video" ? "video" : tab === "combine" ? "combine" : "image");
     if (tab === "mixes") void runMixes();
     else void generate().catch((err) => {
       const msg = err instanceof Error ? err.message : "Generate failed";
@@ -2581,7 +2598,7 @@ export function Studio() {
     <div className="flex min-h-dvh flex-col overflow-x-hidden bg-bg pb-8 text-fg">
       <header className="flex flex-wrap items-center gap-2 px-3 py-3 md:gap-3 md:px-6">
         <p className="text-[15px] font-medium tracking-tight">Forge</p>
-        <span className="text-[11px] tabular-nums text-subtle">236</span>
+        <span className="text-[11px] tabular-nums text-subtle">238</span>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {meta.video ? (
             <select
@@ -2786,9 +2803,18 @@ export function Studio() {
                   return;
                 }
                 if (g === "comic") {
+                  st.setMedia([]);
+                  st.setRefPrompt("");
+                  st.setLiveScan(null);
                   st.setMode("t2i");
                   const lay = COMIC_LAYOUTS.find((l) => l.id === comicLayout) || COMIC_LAYOUTS[2];
                   st.setAspect(lay.aspect);
+                  setShowSource(false);
+                  return;
+                }
+                if (g === "image") {
+                  st.setMode("t2i");
+                  setShowSource(false);
                   return;
                 }
                 if (g !== "mixes") {
@@ -3055,14 +3081,16 @@ export function Studio() {
           </div>
         ) : stageSrc ? (
           stageKind === "video" ? (
-            <ForgeClip src={stageSrc} controls autoPlay className="forge-still mx-auto size-full max-h-[70dvh] object-contain md:max-h-[72dvh]" />
+            <div className="flex w-full flex-1 items-center justify-center px-4 py-2">
+            <ForgeClip src={stageSrc} controls autoPlay className="forge-still mx-auto max-h-[70dvh] w-auto max-w-full object-contain md:max-h-[72dvh]" />
+            </div>
           ) : (
-            <div className="relative mx-auto inline-flex max-h-[70dvh] max-w-full items-center justify-center p-3 md:max-h-[72dvh]">
-              <div className="relative inline-block max-h-[66dvh] max-w-full">
+            <div className="relative flex w-full flex-1 items-center justify-center p-3 md:max-h-[72dvh]">
+              <div className="relative inline-block max-h-[66dvh] max-w-[min(100%,920px)]">
                 <img
                   src={stageSrc}
                   alt=""
-                  className="forge-still max-h-[66dvh] w-auto max-w-full cursor-zoom-in object-contain md:max-h-[70dvh]"
+                  className="forge-still mx-auto max-h-[66dvh] w-auto max-w-full cursor-zoom-in object-contain md:max-h-[70dvh]"
                   onClick={() => setZoom({ src: stageSrc, kind: "image" })}
                   onError={(e) => {
                     const el = e.currentTarget;
@@ -3096,7 +3124,7 @@ export function Studio() {
             <p className="text-2xl font-medium tracking-tight text-fg">Combine 2–5 photos</p>
             <p className="max-w-md text-center text-sm text-muted">
               {media.filter((x) => x.kind === "image").length >= 2
-                ? "Type the new scene below, then Generate. Tap a slot to remove. Library tab to add more."
+                ? "Type the new scene (who is together, where). Generate makes one sharp photo — not a blurry split."
                 : media.filter((x) => x.kind === "image").length === 1
                   ? "That’s slot 1. Open Library for a second photo, or drop one. Then type the new scene."
                   : "Open Library or drop photos. Need at least two."}
@@ -3214,7 +3242,7 @@ export function Studio() {
             </span>
           </button>
         )}
-        <div className={cn("pointer-events-none absolute left-3 top-14 z-[70] w-[7.5rem] space-y-1", (tab === "combine" || (!media.length && !sourceSrc)) && "hidden")}>
+        <div className={cn("pointer-events-none absolute left-3 top-14 z-[70] w-[7.5rem] space-y-1", (tab === "combine" || tab === "comic" || tab === "image" || (!media.length && !sourceSrc)) && "hidden")}>
           <p className="pointer-events-none text-[10px] uppercase tracking-wide text-muted">
             {mode === "ref2i" ? "Combine" : tab === "video" ? "Frame 1" : "Edit source"}
           </p>

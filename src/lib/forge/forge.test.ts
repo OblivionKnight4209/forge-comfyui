@@ -48,6 +48,7 @@ import {
 import {
   buildApiWorkflow,
   i2iDenoise,
+  combineDenoise,
   rewireLoadImages,
   triggerPrefix,
   compatibleLoras,
@@ -2003,6 +2004,16 @@ describe("full regression", () => {
     assert.ok(classes(g).includes("ImageStitch"));
     assert.ok(classes(g).includes("LoadImage"));
     assert.ok(classes(g).includes("VAEEncode"));
+  });
+  it("combine uses high denoise so it merges, not smears", () => {
+    const g = graph({ mode: "ref2i", imageCount: 2, denoise: 0.38 });
+    const ks = Object.values(g).filter((n) => n.class_type === "KSampler");
+    assert.ok(ks.length >= 2, "combine needs a merge pass plus a sharpen pass");
+    assert.ok(Number(ks[0]?.inputs.denoise) >= 0.75);
+    assert.ok(combineDenoise(0.38) >= 0.8);
+    assert.ok(combineDenoise(0.9) <= 0.88);
+    const fit = Object.values(g).find((n) => n._meta?.title === "Fit canvas");
+    assert.equal(fit?.inputs.crop, "disabled");
   });
   it("1.5 mix does not load XL LoRAs", () => {
     assert.equal(loraFitsLane("alice_xl.safetensors", "CuteKittenMix.safetensors"), false);

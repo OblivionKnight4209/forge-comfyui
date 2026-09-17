@@ -17,7 +17,7 @@ import {
   type Mode,
 } from "./types";
 import { applyArtWrap, applyQualityOffers, qualityWantsHires } from "./looks";
-import { buildApiWorkflow, pickLorasForPrompt, rewireLoadImages, triggerPrefix, i2iDenoise } from "./workflows";
+import { buildApiWorkflow, pickLorasForPrompt, rewireLoadImages, triggerPrefix, i2iDenoise, combineDenoise } from "./workflows";
 import { flattenPrompt } from "./wildcards";
 import { probeComfy, queuePrompt, uploadToComfy } from "./comfy.server";
 
@@ -90,11 +90,14 @@ export async function runGenerateIntent(intent: GenerateIntent) {
   }
 
   const i2i = intent.mode === "i2i";
+  const combining = intent.mode === "ref2i";
   const wrapped = i2i
     ? promptIn
     : applyQualityOffers(applyArtWrap(promptIn, intent.artWrap || "none"), intent.quality || []);
-  if (!i2i && qualityWantsHires(intent.quality || [])) settings.hires = true;
-  const sent = i2i
+  if (!i2i && !combining && qualityWantsHires(intent.quality || [])) settings.hires = true;
+  const sent = combining
+    ? `one photograph, the people from every reference photo together in the same place, keep their faces, sharp focus, detailed faces, not a collage, not a split screen, not a grid, ${promptIn}`
+    : i2i
     ? /same art style/i.test(promptIn)
       ? promptIn
       : `${promptIn}, same art style, same rendering, same lighting, same colors, same camera, do not restyle, only the requested edit`
@@ -122,7 +125,9 @@ export async function runGenerateIntent(intent: GenerateIntent) {
           promptIn,
         ),
       )
-    : (intent.denoise ?? 0.65);
+    : combining
+      ? combineDenoise(intent.denoise ?? 0.82)
+      : (intent.denoise ?? 0.65);
   const api = buildApiWorkflow({
     mode: intent.mode,
     prompt: finalPrompt,
