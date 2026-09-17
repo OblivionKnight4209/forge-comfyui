@@ -1223,6 +1223,11 @@ describe("loras", () => {
     assert.match(filled, /tavern/i);
     assert.equal(isCharacterLora("groolpanties.safetensors"), false);
     assert.equal(characterShow("DanMachi_LilirucaArde_IlluXL.safetensors"), "DanMachi");
+    assert.equal(characterShow("TenSura_Shion_IlluXL.safetensors"), "Tensura");
+    assert.equal(characterShow("AerithFF7R-10.safetensors"), "Final Fantasy");
+    assert.equal(characterShow("Sylphie.safetensors"), "Mushoku Tensei");
+    assert.equal(isCharacterLora("Sylphie.safetensors"), true);
+    assert.equal(isCharacterLora("PonyFantasyMythicalBeasts.safetensors"), false);
     assert.match(characterLabel("HighSchoolDxDHERO_RiasGremory_IlluXL.safetensors"), /Rias/i);
   });
   it("turns on LoRAs when you type the character name", () => {

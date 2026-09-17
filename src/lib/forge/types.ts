@@ -869,35 +869,51 @@ const LORA_HARD_ACT =
 const LORA_ACT =
   /pussy|penis|cock|dick|clit|cervix|sex|fuck|anal|oral|tentacle|masturb|cum|semen|dildo|bead|rape|bdsm|bondage|pose|detail|realism|slider|style|panties|thong|nude|naked|breast|boob|nipple|ahegao|throat|creampie|bukkake|gangbang|controlnet|inpaint|canny|tile|upscale|helper|enhanc|watermark|detect|yolo|embed|hypernet|negative|add[_ -]?detail|more[_ -]?details|lightning|turbo|\blcm\b|motion|wan2|i2v|t2v|hires|ultra|\b4x\b|filmic|outfit|clothes|clothing|lingerie|grool|insert|object|choke|vomit|birth|impregn|ovipos|zombie|slime|xenomorph|canine|equine|porcine|insect|sheathe|spread|peek|juice|cameltoe|highleg|wardrobe|torn|finger|facesit|fellatio|cunnilingus|handjob|footjob|paizuri|mating|doggy|missionary|prone|spank|whip|collar|leash|gag|exposure|smear|filthy|nsfw[_ -]?master|noise|concept|helper|fix.?hand|body.?detect/i;
 
+const SHOW_RULES: { re: RegExp; name: string }[] = [
+  { re: /danmachi|dungeon.?ni|liliruca|hestia|aiswallenstein|anyaflomer|chloelolo|yamatomikoto|syr.?flova|ryuu-danmachi|syr_flova/i, name: "DanMachi" },
+  { re: /shield.?hero|tate.?no|filosh|glasssh|atlafayon|raphtalia|sadeena|melty|kizuna|wydia|therese|syne.?lokk|atla-s4/i, name: "Shield Hero" },
+  { re: /dxd|riasgremory|himejima|koneko|xenovia|asiaargento|shidou|kiryuu|kunou|highschool.?dxd/i, name: "High School DxD" },
+  { re: /overlord|albedo|shalltear/i, name: "Overlord" },
+  { re: /mushoku|eris.?boreas|elinalise|sylphie|greyrat/i, name: "Mushoku Tensei" },
+  { re: /tensura|tenken|shion|shuna|velzard|luminous|suphia|myulan|dwargon/i, name: "Tensura" },
+  { re: /isekaimaou|remgalleu|shera|lumachina/i, name: "Isekai Maou" },
+  { re: /isekai.?de.?cheat|kanzakirin|kazamakaede|lexia/i, name: "Isekai Cheat Skill" },
+  { re: /no.?game.?no.?life|jibril|shiro-no-game|shiro-shuvi|shuva|\bizuna\b|hatsuse/i, name: "No Game No Life" },
+  { re: /arankparty|aparida/i, name: "A Rank Party" },
+  { re: /monster.?musume|\bmge\b|papi_|suu_|miia|meroune|arachnera|rachnera/i, name: "Monster Musume" },
+  { re: /ff7|aerith|tifa|lockhart|passiontifa|final.?fantasy/i, name: "Final Fantasy" },
+  { re: /resident|redfield|\bjill\b/i, name: "Resident Evil" },
+  { re: /rosario|moka|akashiya/i, name: "Rosario Vampire" },
+  { re: /\bfgo\b|babylonia|fate.?grand|ishtar/i, name: "Fate" },
+  { re: /yami.?healer|lynga/i, name: "Yami Healer" },
+  { re: /mugen.?gacha/i, name: "Mugen Gacha" },
+  { re: /hidden.?dungeon/i, name: "Hidden Dungeon" },
+  { re: /spy.?family|anya.?forger/i, name: "Spy x Family" },
+  { re: /black.?clover|noelle.?silva/i, name: "Black Clover" },
+  { re: /kimetsu|daki|hinatsuru|demon.?slayer/i, name: "Demon Slayer" },
+  { re: /alice.?starg|alicestarga/i, name: "Alice Starga" },
+  { re: /alexia.?midgar|midgar/i, name: "Eminence in Shadow" },
+  { re: /yuki.?saegusa|saegusa/i, name: "Saegusa" },
+  { re: /werewolf|tengu|harpy|naga|lamia|kitsune/i, name: "Creatures" },
+];
+
 const SHOW_HINT =
   /\([^)]{3,}\)|danmachi|shield.?hero|\bfilosh\b|glasssh|atlafayon|raphtalia|sadeena|meltyq|kizuna|wydia|therese|genshin|honkai|naruto|one.?piece|ff7|final.?fantasy|pokemon|re:?zero|konosuba|overlord|albedo|shalltear|fate.?grand|\bfgo\b|touhou|kancolle|azur.?lane|hololive|vocaloid|my.?hero|bleach|chainsaw|jujutsu|demon.?slayer|kimetsu|evangelion|\bsao\b|\baot\b|spy.?family|anya.?forger|lockhart|raiden|hestia|liliruca|aerith|tifa|alice.?starg|angelina|mara|tamaki|takeda|shinano|kamiya|\bchara_|isekaimaou|isekai.?de.?cheat|mushoku.?tensei|tensura|tenken|highschool.?dxd|\bdxd\b|riasgremory|himejima|toujoukoneko|xenovia|no.?game.?no.?life|\bmge\b|monster.?musume|rosario.?vampire|mugen.?gacha|yami.?healer|hidden.?dungeon|arankparty|aparida|resident.?evil|redfield|valentine|wallenstein|midgar|hatsuse|\bjibril\b|noelle.?silva|sylphie|elinalise|eris.?boreas|remgalleu|luminous|shion|shuna|velzard|dungeon.?ni|isekai.?nonbiri|harpy|naga|lamia|\bkitsune\b|werewolf|hippogriff|basilisk|cockatrice|kelpie|\btengu\b|golem|filo|papi_|suu_|miia|meroune|arachnera|izuna|jill|claire|passiontifa|starga|syne.?lokk|syr.?flova|ryuu-danmachi|illuxl/i;
 
 export function characterShow(filename: string): string {
-  const s = (filename || "").toLowerCase();
-  if (/danmachi|liliruca|hestia|aiswallenstein|anyaflomer|chloelolo|yamatomikoto|syr.?flova|ryuu-/.test(s)) return "DanMachi";
-  if (/shield.?hero|filosh|glasssh|atlafayon|raphtalia|sadeena|melty|kizuna|keel-|wydia|therese|syne.?lokk/.test(s)) return "Shield Hero";
-  if (/dxd|riasgremory|himejima|koneko|xenovia|asiaargento|shidouirina|kiryuu|kunou/.test(s)) return "High School DxD";
-  if (/overlord|albedo|shalltear|emmot|antilene/.test(s)) return "Overlord";
-  if (/mushoku|eris.?boreas|elinalise|sylphie|\blinia\b/.test(s)) return "Mushoku Tensei";
-  if (/tensura|tenken|shion|shuna|velzard|luminous|suphia|myulan|dwargon|fran-/.test(s)) return "Tensura";
-  if (/isekaimaou|remgalleu|shera|lumachina|\bsylvie\b|\brosexl\b/.test(s)) return "Isekai Maou";
-  if (/isekai.?de.?cheat|kanzakirin|kazamakaede|lexia|midoumiu/.test(s)) return "Isekai Cheat Skill";
-  if (/no.?game|jibril|\bshiro\b|shuvi/.test(s)) return "No Game No Life";
-  if (/arankparty|aparida/.test(s)) return "A Rank Party";
-  if (/kimetsu|daki|hinatsuru/.test(s)) return "Demon Slayer";
-  if (/fate|ishtar/.test(s) && /babylonia|fgo|grand/.test(s)) return "Fate";
-  if (/monster.?musume|\bmge\b|papi_|suu_|miia|meroune|arachnera|lamia/.test(s)) return "Monster Musume";
-  if (/ff7|aerith|tifa|lockhart|final.?fantasy/.test(s)) return "Final Fantasy";
-  if (/resident|redfield|valentine/.test(s)) return "Resident Evil";
-  if (/mugen.?gacha/.test(s)) return "Mugen Gacha";
-  if (/yami.?healer/.test(s)) return "Yami Healer";
-  if (/rosario/.test(s)) return "Rosario Vampire";
-  if (/spy.?family|anya.?forger/.test(s)) return "Spy x Family";
-  if (/hidden.?dungeon/.test(s)) return "Hidden Dungeon";
-  if (/nonbiri|nouka/.test(s)) return "Isekai Nonbiri Nouka";
-  if (/noelle|black.?clover/.test(s)) return "Black Clover";
-  if (/harpy|naga|lamia|kitsune|werewolf|hippogriff|basilisk|cockatrice|kelpie|tengu|golem|mge|monster.?musume/.test(s))
-    return "Creatures";
+  const s = (filename || "").replace(/\\/g, "/");
+  const base = s.split("/").pop() || s;
+  for (const row of SHOW_RULES) {
+    if (row.re.test(base) || row.re.test(s)) return row.name;
+  }
+  const prefix = base.match(/^([A-Za-z][A-Za-z0-9]{3,})[_-]/);
+  if (
+    prefix &&
+    /[A-Z]/.test(prefix[1]!.slice(1)) &&
+    !/^(lora|illu|pony|sdxl|chara|illustrious|anima|style|realism|nsfw|concept|slider)$/i.test(prefix[1]!)
+  ) {
+    return prefix[1]!.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/XL$/i, "").trim();
+  }
   return "Other";
 }
 
@@ -906,7 +922,9 @@ export function isCharacterLora(filename: string): boolean {
   const base = (filename || "").replace(/\\/g, "/").split("/").pop() || "";
   const stem = base.replace(/\.(safetensors|ckpt|pt|sft)$/i, "");
   if (!stem || isNotALora(base)) return false;
+  const show = characterShow(base);
   const named =
+    show !== "Other" ||
     SHOW_HINT.test(stem) ||
     /^chara_/i.test(stem) ||
     /_IlluXL/i.test(stem) ||
@@ -914,7 +932,14 @@ export function isCharacterLora(filename: string): boolean {
     /girlpack/i.test(stem) ||
     /[A-Z][a-z]{2,}[A-Z][a-z]{2,}/.test(stem) ||
     /[A-Z][a-z]{2,}_[A-Z][a-z]{2,}/.test(stem);
-  if (LORA_HARD_ACT.test(stem) && !named) return false;
+  if (LORA_HARD_ACT.test(stem) && show === "Other") return false;
+  if (show !== "Other") return true;
+  if (
+    /style|wildcard|poses?|outfit|clothing|slider|detail|realism|helper|concept|quality|mythical.?beast|elements/i.test(stem) &&
+    !SHOW_HINT.test(stem)
+  ) {
+    return false;
+  }
   if (named) return true;
   if (LORA_ACT.test(stem)) return false;
   const trigger = loraTriggerFromFilename(base);

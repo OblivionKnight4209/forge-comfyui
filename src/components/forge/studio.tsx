@@ -322,6 +322,33 @@ export function Studio() {
       });
   }, [loras, familyMatch.family, settings.checkpoint, peopleQ]);
 
+  const peopleGroups = useMemo(() => {
+    const map = new Map<string, typeof peopleLoras>();
+    for (const l of peopleLoras) {
+      const g = characterShow(l.filename);
+      const arr = map.get(g) ?? [];
+      arr.push(l);
+      map.set(g, arr);
+    }
+    return Array.from(map.entries()).sort((a, b) => {
+      if (a[0] === "Other") return 1;
+      if (b[0] === "Other") return -1;
+      return a[0].localeCompare(b[0]);
+    });
+  }, [peopleLoras]);
+
+  async function reloadPeople() {
+    try {
+      const status = await probeComfyFn({ data: { baseUrl: useForge.getState().settings.baseUrl } });
+      if (status) useForge.getState().applyComfy(status);
+      const all = useForge.getState().loras;
+      const n = all.filter((l) => isCharacterLora(l.filename)).length;
+      logForge("info", "People", `${n} people from ${all.length} LoRAs. Restart Comfy if a new file is missing.`);
+    } catch (err) {
+      logForge("error", "People", err instanceof Error ? err.message : "Could not list LoRAs");
+    }
+  }
+
   useEffect(() => {
     document.documentElement.dataset.theme = "void";
   }, []);
@@ -2746,7 +2773,7 @@ export function Studio() {
     <div className="flex min-h-dvh flex-col overflow-x-hidden bg-bg pb-8 text-fg">
       <header className="flex flex-wrap items-center gap-2 px-3 py-3 md:gap-3 md:px-6">
         <p className="text-[15px] font-medium tracking-tight">Forge</p>
-        <span className="text-[11px] tabular-nums text-subtle">248</span>
+        <span className="text-[11px] tabular-nums text-subtle">249</span>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {meta.video ? (
             <select
@@ -3261,25 +3288,39 @@ export function Studio() {
           <div className="flex h-full min-h-[42dvh] flex-col gap-3 overflow-auto px-4 py-4 md:h-[52dvh]">
             <p className="text-2xl font-medium tracking-tight text-fg">People</p>
             <p className="max-w-xl text-sm text-muted">
-              Tap a character LoRA. The name stays in the box and that LoRA turns on. Then Generate — one photo, not a comic page.
-              Illustrious / Anima mix for these names.
+              Tap a character. Name + look go in the box and that LoRA turns on. Then Generate.
+              Use an Illustrious / Anima mix for these names.
             </p>
-            <Input
-              value={peopleQ}
-              onChange={(e) => setPeopleQ(e.target.value)}
-              placeholder="Find Hestia, Raphtalia, Rias, Albedo, Liliruca…"
-              className="h-10 max-w-md bg-raised"
-            />
+            <div className="flex flex-wrap items-center gap-2">
+              <Input
+                value={peopleQ}
+                onChange={(e) => setPeopleQ(e.target.value)}
+                placeholder="Find Hestia, Raphtalia, Rias, Albedo, Liliruca…"
+                className="h-10 max-w-md bg-raised"
+              />
+              <Button type="button" size="sm" variant="secondary" className="rounded-full" onClick={() => void reloadPeople()}>
+                Reload from Comfy
+              </Button>
+              <span className="text-xs text-subtle">
+                {peopleLoras.length} people · {loras.length} LoRAs
+              </span>
+            </div>
+            {peopleGroups.length > 1 ? (
+              <div className="flex flex-wrap gap-1">
+                {peopleGroups.map(([group, list]) => (
+                  <button
+                    key={group}
+                    type="button"
+                    className="rounded-full bg-raised px-2 py-1 text-[11px] text-fg"
+                    onClick={() => setPeopleQ(group === "Other" ? "" : group)}
+                  >
+                    {group} {list.length}
+                  </button>
+                ))}
+              </div>
+            ) : null}
             <div className="min-h-0 flex-1 space-y-3 overflow-auto">
-              {Array.from(
-                peopleLoras.reduce((map, l) => {
-                  const g = characterShow(l.filename);
-                  const arr = map.get(g) ?? [];
-                  arr.push(l);
-                  map.set(g, arr);
-                  return map;
-                }, new Map<string, typeof peopleLoras>()),
-              ).map(([group, list]) => (
+              {peopleGroups.map(([group, list]) => (
                 <div key={group}>
                   <p className="mb-1 text-[11px] uppercase tracking-wide text-muted">{group}</p>
                   <div className="flex flex-wrap gap-1.5">
@@ -4294,16 +4335,11 @@ export function Studio() {
                     placeholder="Find Hestia, Raphtalia, Rias, Albedo…"
                     className="h-9 bg-bg text-sm"
                   />
-                  <div className="max-h-56 space-y-2 overflow-auto">
-                    {Array.from(
-                      peopleLoras.reduce((map, l) => {
-                        const g = characterShow(l.filename);
-                        const arr = map.get(g) ?? [];
-                        arr.push(l);
-                        map.set(g, arr);
-                        return map;
-                      }, new Map<string, typeof peopleLoras>()),
-                    ).map(([group, list]) => (
+                  <Button type="button" size="sm" variant="secondary" className="rounded-full" onClick={() => void reloadPeople()}>
+                    Reload from Comfy
+                  </Button>
+                  <div className="max-h-72 space-y-2 overflow-auto">
+                    {peopleGroups.map(([group, list]) => (
                       <div key={group}>
                         <p className="px-1 text-[10px] uppercase tracking-wide text-muted">{group}</p>
                         <div className="flex flex-wrap gap-1.5">
