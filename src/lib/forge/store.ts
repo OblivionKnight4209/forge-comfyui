@@ -546,6 +546,11 @@ export const useForge = create<ForgeState>()(
         blankStage: s.blankStage,
         jobCount: s.jobCount,
       }),
+      onRehydrateStorage: () => (s) => {
+        if (!s) return;
+        if (s.artWrap === "comic" || s.artWrap === "manga") s.artWrap = "none";
+        s.qualityPick = (s.qualityPick || []).filter((id) => id !== "splash");
+      },
     },
   ),
 );

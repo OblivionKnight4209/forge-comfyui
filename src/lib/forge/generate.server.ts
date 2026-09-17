@@ -16,7 +16,7 @@ import {
   type LoraEntry,
   type Mode,
 } from "./types";
-import { applyArtWrap, applyQualityOffers, qualityWantsHires } from "./looks";
+import { applyArtWrap, applyQualityOffers, qualityWantsHires, stripComicPageTalk } from "./looks";
 import { buildApiWorkflow, pickLorasForPrompt, rewireLoadImages, triggerPrefix, i2iDenoise, combineDenoise } from "./workflows";
 import { flattenPrompt } from "./wildcards";
 import { probeComfy, queuePrompt, uploadToComfy } from "./comfy.server";
@@ -91,17 +91,22 @@ export async function runGenerateIntent(intent: GenerateIntent) {
 
   const i2i = intent.mode === "i2i";
   const combining = intent.mode === "ref2i";
+  const comicJob = /\bpanel 1\b/i.test(promptIn);
   const wrapped = i2i
     ? promptIn
-    : applyQualityOffers(applyArtWrap(promptIn, intent.artWrap || "none"), intent.quality || []);
+    : applyQualityOffers(
+        applyArtWrap(promptIn, intent.artWrap === "comic" || intent.artWrap === "manga" ? "none" : intent.artWrap || "none"),
+        (intent.quality || []).filter((id) => id !== "splash"),
+      );
   if (!i2i && !combining && qualityWantsHires(intent.quality || [])) settings.hires = true;
+  const stillPrompt = comicJob ? wrapped : stripComicPageTalk(wrapped);
   const sent = combining
-    ? `one photograph, the people from every reference photo together in the same place, keep their faces, sharp focus, detailed faces, not a collage, not a split screen, not a grid, ${promptIn}`
+    ? `one photograph, the people from every reference photo together in the same place, keep their faces, sharp focus, detailed faces, not a collage, not a split screen, not a grid, ${stripComicPageTalk(promptIn)}`
     : i2i
     ? /same art style/i.test(promptIn)
       ? promptIn
       : `${promptIn}, same art style, same rendering, same lighting, same colors, same camera, do not restyle, only the requested edit`
-    : flattenPrompt(wrapped, intent.seed || 1);
+    : flattenPrompt(stillPrompt, intent.seed || 1);
   const loraCkpt = video ? settings.wanUnet || settings.checkpoint : settings.checkpoint;
   const picked = pickLorasForPrompt(
     promptIn,

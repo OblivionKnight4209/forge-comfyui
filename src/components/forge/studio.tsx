@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type DragEvent as ForgeDragEvent } from "react";
 import { SpeechMic, appendSpoken } from "@/components/forge/speech-mic";
-import { applyArtWrap, applyQualityOffers, ART_WRAPS, QUALITY_OFFERS, qualityWantsHires, randomSceneLine, LOOK_APPENDS } from "@/lib/forge/looks";
+import { applyArtWrap, applyQualityOffers, ART_WRAPS, QUALITY_OFFERS, qualityWantsHires, randomSceneLine, LOOK_APPENDS, stripComicPageTalk } from "@/lib/forge/looks";
 import { toast as sonnerToast } from "sonner";
 const toast = {
   error: sonnerToast.error.bind(sonnerToast),
@@ -214,7 +214,7 @@ export function Studio() {
     models: [],
     message: "Ollama off",
   });
-  const [tab, setTab] = useState<"image" | "combine" | "comic" | "video" | "errors" | "mixes" | "library">("image");
+  const [tab, setTab] = useState<"image" | "combine" | "comic" | "video" | "errors" | "mixes" | "library" | "people">("image");
   const [comicLayout, setComicLayout] = useState("2x2");
   const [comicInk, setComicInk] = useState("manga-ink");
   const [mixPick, setMixPick] = useState<string[]>([]);
@@ -2324,10 +2324,11 @@ export function Studio() {
     let finalPrompt = triggerPrefix(stacked, sent);
     if (runMode !== "i2i" && tab !== "comic") {
       finalPrompt = applyArtWrap(finalPrompt, useForge.getState().artWrap);
-      finalPrompt = applyQualityOffers(finalPrompt, useForge.getState().qualityPick);
+      finalPrompt = applyQualityOffers(finalPrompt, useForge.getState().qualityPick.filter((id) => id !== "splash"));
       if (qualityWantsHires(useForge.getState().qualityPick) && !settingsNow.hires) {
         settingsNow = { ...settingsNow, hires: true };
       }
+      finalPrompt = stripComicPageTalk(finalPrompt);
     }
     if (runMode === "ref2i" && tab !== "comic") {
       finalPrompt = `one photograph, the people from every reference photo together in the same place, keep their faces, sharp focus, detailed faces, not a collage, not a split screen, not two frames, not a grid, not a diptych, ${finalPrompt}`;
@@ -2627,7 +2628,7 @@ export function Studio() {
     <div className="flex min-h-dvh flex-col overflow-x-hidden bg-bg pb-8 text-fg">
       <header className="flex flex-wrap items-center gap-2 px-3 py-3 md:gap-3 md:px-6">
         <p className="text-[15px] font-medium tracking-tight">Forge</p>
-        <span className="text-[11px] tabular-nums text-subtle">240</span>
+        <span className="text-[11px] tabular-nums text-subtle">241</span>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {meta.video ? (
             <select
@@ -2780,7 +2781,7 @@ export function Studio() {
 
       <div className="flex min-w-0 flex-col gap-1 px-2 md:px-4">
         <div className="flex min-w-0 items-center gap-0.5 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {(["image", "video", "combine", "comic", "library", "mixes"] as const).map((g) => (
+          {(["image", "people", "video", "combine", "comic", "library", "mixes"] as const).map((g) => (
             <button
               key={g}
               type="button"
@@ -2801,6 +2802,14 @@ export function Studio() {
                 st.setEditChange("");
                 setShowSource(false);
                 setZoom(null);
+                if (g === "people") {
+                  st.setMode("t2i");
+                  if (st.artWrap === "comic" || st.artWrap === "manga") st.setArtWrap("none");
+                  st.setQualityPick(st.qualityPick.filter((id) => id !== "splash"));
+                  if (st.aspect === "3:4") st.setAspect("1:1");
+                  setDock("people");
+                  return;
+                }
                 if (g === "video") {
                   const img =
                     st.media.find((m) => m.kind === "image") ||
@@ -2843,6 +2852,9 @@ export function Studio() {
                 }
                 if (g === "image") {
                   st.setMode("t2i");
+                  if (st.artWrap === "comic" || st.artWrap === "manga") st.setArtWrap("none");
+                  st.setQualityPick(st.qualityPick.filter((id) => id !== "splash"));
+                  if (st.aspect === "3:4") st.setAspect("1:1");
                   setShowSource(false);
                   return;
                 }
@@ -2866,7 +2878,9 @@ export function Studio() {
             >
               {g === "image"
                 ? "Image"
-                : g === "combine"
+                : g === "people"
+                  ? "People"
+                  : g === "combine"
                   ? "Combine"
                   : g === "comic"
                     ? "Comic"
@@ -3078,7 +3092,62 @@ export function Studio() {
         }}
         onDrop={onStageDrop}
       >
-        {batchStills.length > 1 ? (
+        {tab === "people" ? (
+          <div className="flex h-full min-h-[42dvh] flex-col gap-3 overflow-auto px-4 py-4 md:h-[52dvh]">
+            <p className="text-2xl font-medium tracking-tight text-fg">People</p>
+            <p className="max-w-xl text-sm text-muted">
+              Tap a character LoRA. The name stays in the box and that LoRA turns on. Then Generate — one photo, not a comic page.
+              Illustrious / Anima mix for these names.
+            </p>
+            <Input
+              value={peopleQ}
+              onChange={(e) => setPeopleQ(e.target.value)}
+              placeholder="Find Hestia, Raphtalia, Rias, Albedo, Liliruca…"
+              className="h-10 max-w-md bg-raised"
+            />
+            <div className="min-h-0 flex-1 space-y-3 overflow-auto">
+              {Array.from(
+                peopleLoras.reduce((map, l) => {
+                  const g = characterShow(l.filename);
+                  const arr = map.get(g) ?? [];
+                  arr.push(l);
+                  map.set(g, arr);
+                  return map;
+                }, new Map<string, typeof peopleLoras>()),
+              ).map(([group, list]) => (
+                <div key={group}>
+                  <p className="mb-1 text-[11px] uppercase tracking-wide text-muted">{group}</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {list.map((l) => (
+                      <button
+                        key={l.id}
+                        type="button"
+                        title={l.filename}
+                        onClick={() => toggleCharacter(l)}
+                        className={
+                          l.enabled
+                            ? "h-9 max-w-[14rem] truncate rounded-full bg-accent px-3 text-sm text-accent-fg"
+                            : "h-9 max-w-[14rem] truncate rounded-full bg-raised px-3 text-sm text-fg"
+                        }
+                      >
+                        {characterLabel(l.filename)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+            {!peopleLoras.length ? (
+              <p className="text-sm text-subtle">
+                {loras.some((l) => isCharacterLora(l.filename))
+                  ? "Those person LoRAs do not fit this mix. Switch to an Illustrious / Anima checkpoint in Settings."
+                  : "No person LoRAs yet. Move the .safetensors files into ~/comfy/ComfyUI/models/loras and restart Comfy."}
+              </p>
+            ) : (
+              <p className="text-xs text-subtle">{peopleLoras.length} people on this mix · tap again to turn off</p>
+            )}
+          </div>
+        ) : batchStills.length > 1 ? (
           <div
             className={cn(
               "mx-auto grid max-h-[70dvh] w-full max-w-5xl gap-2 p-3 md:max-h-[72dvh]",

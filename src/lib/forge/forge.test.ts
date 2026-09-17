@@ -63,7 +63,7 @@ import {
 import { isVideoName, mediaMime, withVideoDataUrl } from "./media-mime.ts";
 import { expandPrompt, parseInlineLoras, writePrompt, keepNeutral, userLead, grokExpand, grokMotion, flattenPrompt, withRandomBlocks, recoverScene, isPurpleProse, DEFAULT_WILDCARDS, isAdult, composeNewScene, isShortSubject, sceneCore, tokenOverlap, nsfwWanted } from "./wildcards.ts";
 import { isWashed, nsfwGroup, writeExtreme, writeHorrorSet, writeTabooSet, writeDarkSet, NSFW_TYPES, writeMenus, FACE_BITS, BODY_BITS, CLOTHES_BITS, PLACE_BITS } from "./extreme.ts";
-import { applyArtWrap, applyQualityOffers, qualityWantsHires, randomSceneLine, LOOK_APPENDS } from "./looks.ts";
+import { applyArtWrap, applyQualityOffers, qualityWantsHires, randomSceneLine, LOOK_APPENDS, stripComicPageTalk } from "./looks.ts";
 import { applyVote, emptyTaste, extraNegFromTaste, ckptScore, sortCkptsByTaste, warnForCheckpoint } from "./taste.ts";
 import { pickBrainModel, cleanBrainOut, brainSystem } from "./brain.ts";
 import { designClipAudio, ensureVoice } from "./clip-sound.ts";
@@ -696,6 +696,9 @@ describe("writer", () => {
     const a = applyArtWrap("a cat fights a dog", "anime");
     assert.match(a, /a cat fights a dog/);
     assert.match(a, /anime still/);
+    assert.equal(applyArtWrap("a cat fights a dog", "comic"), "a cat fights a dog");
+    assert.doesNotMatch(stripComicPageTalk("a cat fights a dog, comic book panel, black gutters, panel 1"), /comic book|gutter|panel 1/i);
+    assert.match(stripComicPageTalk("a cat fights a dog, comic book panel"), /cat fights a dog/i);
     assert.match(randomSceneLine(1), /\S/);
   });
   it("quality offers add 4k / photoreal and mark hires", () => {

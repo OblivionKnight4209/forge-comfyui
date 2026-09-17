@@ -22,10 +22,25 @@ export const ART_WRAPS: ArtWrap[] = [
 export function applyArtWrap(prompt: string, wrapId: string) {
   const p = prompt.trim();
   if (!p) return p;
+  if (wrapId === "comic" || wrapId === "manga") return p;
   const wrap = ART_WRAPS.find((w) => w.id === wrapId && w.id !== "none" && w.id !== "none2");
   if (!wrap) return p;
   if (p.includes(wrap.label.toLowerCase()) || new RegExp(wrap.wrap.split(",")[0]!, "i").test(p)) return p;
   return wrap.wrap.replace("[p]", p);
+}
+
+/** Image tab is a single photo. Comic-page talk belongs on the Comic tab. */
+export function stripComicPageTalk(prompt: string) {
+  return (prompt || "")
+    .replace(/\b(printed )?comic( book)? (page|panel|splash page)\b/gi, "")
+    .replace(/\bmanga page\b/gi, "")
+    .replace(/\b(black gutters|sequential art|screentones?|halftone|webtoon panel)\b/gi, "")
+    .replace(/\bpanel [1-9]\b[: ]*/gi, "")
+    .replace(/\b(same faces every panel|arrange the reference photos as panels[^.]*|one comic page with black gutters)\b/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/(,\s*){2,}/g, ", ")
+    .replace(/^[\s,]+|[\s,]+$/g, "")
+    .trim();
 }
 
 export const LOOK_APPENDS: { id: string; label: string; tags: string }[] = [
