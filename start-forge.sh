@@ -15,14 +15,14 @@ if [ ! -d node_modules ]; then
 fi
 
 echo
-echo "Forge v246 — local only"
+echo "Forge v247 — local only"
 echo "Keep ComfyUI running:"
 echo "  cd ~/comfy/ComfyUI && source .venv/bin/activate && python main.py --listen 0.0.0.0 --port 8188"
 echo
 echo "This PC (controls):  http://127.0.0.1:8080"
 echo "This PC (display):   http://127.0.0.1:8080/stage"
 echo "Laptop / phone:      http://$(hostname -I | awk '{print $1}'):8080"
-echo "If the top-left does not say 246, you unzipped the old zip."
+echo "If the top-left does not say 247, you unzipped the old zip."
 echo "Sound on clips needs:  sudo apt install -y ffmpeg espeak-ng"
 echo "Laptop: same Wi-Fi, http://$(hostname -I | awk '{print $1}'):8080  (not 127.0.0.1)"
 echo

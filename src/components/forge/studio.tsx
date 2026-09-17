@@ -1232,16 +1232,40 @@ export function Studio() {
     }
   }
 
-  function remakeThisStill() {
-    if (!active) {
+  function remakeThisStill(job?: Job) {
+    const j = job || active;
+    if (!j) {
       toast.error("Generate one first, then Remake");
       return;
     }
-    useForge.getState().setPrompt(active.expandedPrompt || active.prompt);
-    useForge.getState().setSeed(active.seed);
+    useForge.getState().setPrompt(j.expandedPrompt || j.prompt);
+    useForge.getState().setSeed(j.seed);
     if (!useForge.getState().seedLocked) useForge.getState().toggleSeedLock();
-    useForge.getState().setMode(MODE_META[active.mode].video ? active.mode : "t2i");
-    toast.success(`Remake · seed ${active.seed} locked. Tweak prompt or Generate.`);
+    if (j.checkpoint) useForge.getState().setSettings(settingsForCheckpoint(j.checkpoint));
+    useForge.getState().setMode(MODE_META[j.mode].video ? j.mode : "t2i");
+    setTab(MODE_META[j.mode].video ? "video" : "image");
+    useForge.getState().setActiveJob(j.id);
+    toast.success(
+      `Remake · ${(j.checkpoint || "").split(/[/\\]/).pop() || "mix"} · seed ${j.seed} locked. Tweak, then Generate.`,
+    );
+  }
+
+  async function redoThisStill(job?: Job) {
+    const j = job || active;
+    if (!j) {
+      toast.error("Generate one first, then Redo");
+      return;
+    }
+    useForge.getState().setPrompt(j.expandedPrompt || j.prompt);
+    useForge.getState().setSeed(j.seed);
+    if (!useForge.getState().seedLocked) useForge.getState().toggleSeedLock();
+    const ckpt = j.checkpoint;
+    if (ckpt) useForge.getState().setSettings(settingsForCheckpoint(ckpt));
+    toast.success(`Redo · ${(ckpt || "").split(/[/\\]/).pop() || "mix"} · seed ${j.seed}`);
+    const before = new Set(useForge.getState().jobs.map((x) => x.id));
+    await generateRef.current({ checkpoint: ckpt, keepSeed: true, quiet: true });
+    const added = useForge.getState().jobs.find((x) => !before.has(x.id));
+    if (added) setMixJobIds((ids) => (ids.includes(added.id) ? ids : [added.id, ...ids]));
   }
 
   async function deleteThisStill(srcOverride?: string) {
@@ -2713,7 +2737,7 @@ export function Studio() {
     <div className="flex min-h-dvh flex-col overflow-x-hidden bg-bg pb-8 text-fg">
       <header className="flex flex-wrap items-center gap-2 px-3 py-3 md:gap-3 md:px-6">
         <p className="text-[15px] font-medium tracking-tight">Forge</p>
-        <span className="text-[11px] tabular-nums text-subtle">246</span>
+        <span className="text-[11px] tabular-nums text-subtle">247</span>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {meta.video ? (
             <select
@@ -2981,6 +3005,8 @@ export function Studio() {
           <div className="mt-2 space-y-2">
             <p className="text-sm text-muted">
               Type a prompt below. Seed is locked so every mix starts the same. Tick the image checkpoints, then Run.
+              Each result gets <span className="text-fg">Redo</span> (same mix, same seed, queue again) and{" "}
+              <span className="text-fg">Remake</span> (load that mix + seed so you can tweak).
               Comfy does them one after another — 40 mixes can take hours.
             </p>
             <div className="flex flex-wrap items-center gap-2">
@@ -3832,21 +3858,21 @@ export function Studio() {
             if (!job) return null;
             const label = (job.checkpoint || "").split("/").pop() || "mix";
             return (
-              <button
-                key={id}
-                type="button"
-                className="overflow-hidden rounded-xl bg-raised text-left"
-                onClick={() => {
-                  adoptJob(job);
-                  if (job.resultDataUrl) {
-                    setZoom({
-                      src: job.resultDataUrl,
-                      kind: job.resultKind,
-                      name: label,
-                    });
-                  }
-                }}
-              >
+              <div key={id} className="overflow-hidden rounded-xl bg-raised text-left">
+                <button
+                  type="button"
+                  className="block w-full"
+                  onClick={() => {
+                    adoptJob(job);
+                    if (job.resultDataUrl) {
+                      setZoom({
+                        src: job.resultDataUrl,
+                        kind: job.resultKind,
+                        name: label,
+                      });
+                    }
+                  }}
+                >
                 <div className="aspect-square bg-surface">
                   {job.resultDataUrl ? (
                     <img src={job.resultDataUrl} alt="" className="size-full object-cover" />
@@ -3857,8 +3883,32 @@ export function Studio() {
                   )}
                 </div>
                 <p className="truncate px-2 py-1 text-[11px] text-fg">{label}</p>
-                <p className="px-2 pb-2 text-[10px] text-subtle">seed {job.seed}</p>
-              </button>
+                <p className="px-2 pb-1 text-[10px] text-subtle">seed {job.seed}</p>
+                </button>
+                <div className="flex gap-1 px-2 pb-2">
+                  <button
+                    type="button"
+                    className="flex-1 rounded-md bg-accent px-1 py-1 text-[10px] text-accent-fg"
+                    disabled={job.status !== "done"}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void redoThisStill(job);
+                    }}
+                  >
+                    Redo
+                  </button>
+                  <button
+                    type="button"
+                    className="flex-1 rounded-md bg-raised px-1 py-1 text-[10px] text-fg ring-1 ring-line"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      remakeThisStill(job);
+                    }}
+                  >
+                    Remake
+                  </button>
+                </div>
+              </div>
             );
           })}
         </div>
@@ -5030,6 +5080,31 @@ export function Studio() {
             >
               Add to Combine
             </Button>
+            {jobs.find((j) => j.resultDataUrl === zoom.src) ? (
+              <>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    const j = jobs.find((x) => x.resultDataUrl === zoom.src);
+                    if (j) void redoThisStill(j);
+                    setZoom(null);
+                  }}
+                >
+                  Redo
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => {
+                    const j = jobs.find((x) => x.resultDataUrl === zoom.src);
+                    if (j) remakeThisStill(j);
+                    setZoom(null);
+                  }}
+                >
+                  Remake
+                </Button>
+              </>
+            ) : null}
             <Button
               size="sm"
               variant="secondary"
