@@ -852,27 +852,31 @@ export function Studio() {
     still: { src: string; name: string; folder?: "input" | "output" },
     how: "edit" | "add",
   ) {
-    const dataUrl = await asDataUrl(still.src).catch(() => still.src);
     const item = {
       id: uid(),
       kind: "image" as const,
       name: still.name,
-      dataUrl,
+      dataUrl: still.src,
       folder: still.folder || "output",
     };
     const st = useForge.getState();
-    if (tab === "video") {
-      loadForVideo(dataUrl, still.name, still.folder);
-      return;
-    }
-    const combining = how === "add" || st.mode === "ref2i" || tab === "combine";
-    if (combining && how === "add") {
+    if (how === "add") {
+      if (alreadyInCombine(item)) {
+        toast.error("That photo is already in a Combine slot.");
+        return;
+      }
       const n = pushCombinePhoto(item);
       setShowSource(true);
-      logForge("info", "Combine", n < 2 ? `${n} photo — tap a different one` : `${n} different photos`);
+      toast.success(
+        n < 2 ? `Slot ${n}. Mix a second still.` : `${n} photos in Combine. Mix more, or Generate.`,
+      );
       return;
     }
-    loadForEdit(dataUrl, still.name, still.folder);
+    if (tab === "video") {
+      loadForVideo(still.src, still.name, still.folder);
+      return;
+    }
+    loadForEdit(still.src, still.name, still.folder);
   }
 
   function useLibraryFile(
@@ -881,13 +885,12 @@ export function Studio() {
   ) {
     const src = `/forge-media?folder=${f.folder}&name=${encodeURIComponent(f.name)}`;
     const vid = isVideoName(f.name);
-    if (action === "zoom" || vid) {
+    if (action === "zoom" || (vid && action !== "video")) {
       setZoom({ src, kind: vid ? "video" : "image", name: f.name });
       return;
     }
     if (action === "combine") {
       void placeLibraryStill({ src, name: f.name, folder: f.folder }, "add");
-      setTab("combine");
       return;
     }
     if (action === "video") {
@@ -2710,7 +2713,7 @@ export function Studio() {
     <div className="flex min-h-dvh flex-col overflow-x-hidden bg-bg pb-8 text-fg">
       <header className="flex flex-wrap items-center gap-2 px-3 py-3 md:gap-3 md:px-6">
         <p className="text-[15px] font-medium tracking-tight">Forge</p>
-        <span className="text-[11px] tabular-nums text-subtle">245</span>
+        <span className="text-[11px] tabular-nums text-subtle">246</span>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {meta.video ? (
             <select
@@ -3095,8 +3098,23 @@ export function Studio() {
               Refresh
             </Button>
             <p className="w-full text-xs text-muted">
-              Tap a still to enlarge. Edit / Combine / Play send it to that tab.
+              {libraryReturn === "combine"
+                ? `Combine: tap a still to put it in a slot (${media.filter((x) => x.kind === "image").length}/5). Stay here and tap another. Then Combine.`
+                : "Tap a still to enlarge. Mix / Edit / Play send it."}
             </p>
+            {libraryReturn === "combine" ? (
+              <Button
+                type="button"
+                size="sm"
+                className="rounded-full"
+                onClick={() => {
+                  useForge.getState().setMode("ref2i");
+                  setTab("combine");
+                }}
+              >
+                Combine {media.filter((x) => x.kind === "image").length}/5
+              </Button>
+            ) : null}
           </div>
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8">
             {library
@@ -3112,7 +3130,10 @@ export function Studio() {
                       draggable
                       className="block w-full cursor-grab active:cursor-grabbing"
                       onDragStart={(e) => dragForgeStill(e, { src, name: f.name, folder: f.folder })}
-                      onClick={() => useLibraryFile(f, "zoom")}
+                      onClick={() => {
+                        if (libraryReturn === "combine" && !vid) useLibraryFile(f, "combine");
+                        else useLibraryFile(f, "zoom");
+                      }}
                       title={f.name}
                     >
                       {vid ? (
@@ -3142,13 +3163,44 @@ export function Studio() {
                       <Trash2 className="size-3.5" />
                     </button>
                     <div className="absolute inset-x-0 bottom-0 flex gap-0.5 bg-bg/80 p-1 text-[10px]">
-                      <button type="button" className="flex-1 rounded bg-raised px-1 py-0.5 text-fg" onClick={() => useLibraryFile(f, "edit")}>
+                      <button
+                        type="button"
+                        className="flex-1 rounded bg-raised px-1 py-0.5 text-fg"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          useLibraryFile(f, "zoom");
+                        }}
+                      >
+                        View
+                      </button>
+                      <button
+                        type="button"
+                        className="flex-1 rounded bg-raised px-1 py-0.5 text-fg"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          useLibraryFile(f, "edit");
+                        }}
+                      >
                         Edit
                       </button>
-                      <button type="button" className="flex-1 rounded bg-raised px-1 py-0.5 text-fg" onClick={() => useLibraryFile(f, "combine")}>
+                      <button
+                        type="button"
+                        className="flex-1 rounded bg-accent px-1 py-0.5 text-accent-fg"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          useLibraryFile(f, "combine");
+                        }}
+                      >
                         Mix
                       </button>
-                      <button type="button" className="flex-1 rounded bg-raised px-1 py-0.5 text-fg" onClick={() => useLibraryFile(f, "video")}>
+                      <button
+                        type="button"
+                        className="flex-1 rounded bg-raised px-1 py-0.5 text-fg"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          useLibraryFile(f, "video");
+                        }}
+                      >
                         Play
                       </button>
                     </div>
