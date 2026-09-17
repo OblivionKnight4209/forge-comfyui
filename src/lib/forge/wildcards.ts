@@ -72,26 +72,46 @@ export function withRandomBlocks(lead: string, nsfw = false): string {
   if (!t) return t;
   if (/\{/.test(t)) return t;
   const c = lookCast(t);
-  const shot = "{full body|three-quarter|low angle|eye level|over-the-shoulder}";
-  const light = "{warm daylight|overcast|golden hour|cool moonlight|neon night|soft window light}";
-  const place = c.fight
-    ? "{dirt yard|wet alley|keep courtyard|rubble lot|torch-lit street}"
-    : "{dim bedroom|rain-slick alley|rooftop at night|small kitchen|wooded path}";
+  const shot = "{full body|three-quarter view|low angle|eye level close-up|over-the-shoulder}";
+  const light = "{warm daylight|overcast sky|golden hour rim light|cool moonlight|neon night|soft window light}";
+  const vibe = nsfw
+    ? "{highly eroticized yet sharp|bold and explicit|opulent and sensual}"
+    : "{cinematic and grounded|quiet and tense|vivid and clean}";
   if (c.animals.length) {
     const bits = c.animals.map((a) => {
-      if (a === "cat") return "{an orange tabby|a black shorthair|a grey street cat}, {arched spine|low crouch}, {slit pupils|bared fangs}";
-      if (a === "dog") return "{a stocky brown mutt|a brindle dog|a white-chested mutt}, {hackles up|heavy paws}, {bared teeth|jowls pulled}";
-      if (a === "husky") return "{a black-and-white husky|a grey agouti husky}, ice-blue eyes, {gathered to spring|shoulders down}";
+      if (a === "cat") return "{an orange tabby|a black shorthair|a grey street cat} with {arched spine|a low crouch}, {slit pupils|bared fangs}";
+      if (a === "dog") return "{a stocky brown mutt|a brindle dog|a white-chested mutt} with {hackles up|heavy paws}, {bared teeth|wet jowls}";
+      if (a === "husky") return "{a black-and-white husky|a grey agouti husky} with ice-blue eyes, {gathered to spring|shoulders down}";
       return `{an adult ${a}}`;
     });
-    return `${shot} of ${t}, ${bits.join(", ")}, ${place}, ${light}, fur flying`;
+    const place = c.fight
+      ? "{a dirt yard|a wet alley|a keep courtyard|a rubble lot}"
+      : "{a frozen street|a wet alley|a field at dusk}";
+    return `{a sharp|a lush|a high-fidelity} ${shot} of ${t}. ${bits.join(". ")}. Setting: ${place}, ${light}. ${vibe}. detailed fur, detailed paws.`;
   }
-  const hair = "{long black hair|silver hair|auburn hair|short dark hair|wind-swept hair}";
-  const eyes = "{brown eyes|green eyes|grey eyes|amber eyes}";
+  const hair = "{long black hair to the waist|silver hair in a high tail|auburn hair in loose waves|short dark hair|wind-swept messy hair}";
+  const eyes = "{brown eyes|green eyes|grey eyes|amber eyes|violet eyes}";
+  const body = nsfw
+    ? "{soft stomach, full hips, strong thighs|athletic waist, long legs|lush curves, flushed skin}"
+    : "{adult proportions, long legs|compact athletic build|soft stomach, full hips}";
   const clothes = nsfw
-    ? "{sheer silk|torn clothes|barely-there lace|open shirt}"
-    : "{worn jacket|simple shirt|travel cloak|armor straps}";
-  return `${shot} of ${t}, ${hair}, ${eyes}, ${clothes}, ${place}, ${light}`;
+    ? "{sheer silk that barely covers her|torn clothes hanging off one shoulder|barely-there lace|an open shirt and nothing else}"
+    : "{a worn jacket over a simple shirt|a knit sweater and skirt|travel cloak and boots|practical street clothes}";
+  const pose = nsfw
+    ? "{arched back, looking at the viewer|leaning against a wall, one knee bent|sitting on the edge of the bed}"
+    : "{standing grounded, weight on one hip|mid-stride|looking slightly aside}";
+  const place = c.fight
+    ? "{a dirt yard after rain|a torch-lit street|cracked flagstones}"
+    : nsfw
+      ? "{a dim bedroom|a rain-slick alley|a neon loft}"
+      : "{a quiet street|a small kitchen|a rooftop at dusk}";
+  const magic = c.magical
+    ? " {star-tipped wand raised overhead|heart scepter wand|crystal wand staff}, {frilly minidress|sailor collar and thigh-highs|henshin burst}."
+    : "";
+  const act = isAdult(t) || (nsfw && !c.fight)
+    ? " {She is flushed and explicit|bodies close, uncensored|raw adult scene}."
+    : "";
+  return `{a breathtakingly detailed|a lush vivid|a sharp cinematic} ${shot} of ${t}. She has ${hair} and ${eyes}, ${body}, wearing ${clothes}. She is ${pose}.${magic}${act} Setting: ${place}, ${light}. The look is ${vibe}. detailed hands, detailed eyes, detailed skin.`;
 }
 
 function tooClose(out: string, inn: string) {
@@ -316,7 +336,7 @@ function lookCast(text: string) {
   const goblin = /\bgoblins?\b/.test(t);
   const orc = /\borcs?\b/.test(t);
   const monster = /\b(monster|demon|beast|troll|dragon|werewolf|creature|fiend|ogre)\b/.test(t);
-  const fight = /\b(fight|fighting|vs|versus|battle|duel|clash|combat|warrior|knight)\b/.test(t);
+  const fight = /\b(fight|fighting|vs|versus|battle|duel|clash|combat|warrior|knight|kicks?|punches?)\b/.test(t);
   const warrior = /\b(warrior|knight|soldier|fighter|champion|guard|paladin|vanguard)\b/.test(t);
   const magical = /\b(magical girls?|mahou shoujo|pretty cure|precure|henshin|sailor (moon|scout|senshi)|transformation (wand|brooch|stick))\b/.test(t);
   const humanFemale = female || (/\bhuman\b/.test(t) && (female || warrior));
@@ -353,7 +373,7 @@ const ANIMAL_LOOK: Record<string, { body: string[]; coat: string[]; face: string
   dog: {
     body: ["medium mixed-breed dog, deep chest, thick neck, heavy paws", "stocky mutt, short legs, wide stance"],
     coat: ["short brown coat, white blaze", "brindle scruff, dirty from the yard"],
-    face: ["black nose, bared teeth, ears back, spit flying", "jowls pulled, eyes locked on the cat"],
+    face: ["black nose, bared teeth, ears back, spit flying", "jowls pulled, eyes locked on her"],
     pose: ["hackles up, lunging on forelegs", "braced, snapping at the cat's shoulder"],
   },
   husky: {
@@ -456,8 +476,8 @@ const MAGICAL_GIRL = {
   ],
   wand: [
     "star-tipped wand raised overhead",
-    "heart scepter, ribbon trailing",
-    "crystal staff catching the moonlight",
+    "heart scepter wand, ribbon trailing",
+    "crystal wand staff catching the moonlight",
   ],
   pose: [
     "landing from henshin, skirt flipping, light burst from the brooch",
@@ -658,15 +678,30 @@ export function isShortSubject(text: string) {
   const words = t.split(/\s+/).filter(Boolean);
   const commas = (t.match(/,/g) || []).length;
   if (!words.length) return false;
+  if (hasLook(t) || hasShot(t)) return words.length <= 5 && commas === 0;
   if (words.length <= 8) return true;
   return words.length <= 10 && commas === 0;
+}
+
+/** Short line or missing look/place — Brain / Generate should build the rest of the scene. */
+export function needsSceneFill(text: string) {
+  const t = (text || "").replace(/\s+/g, " ").trim();
+  if (!t) return true;
+  if (isShortSubject(t)) return true;
+  if (!hasLook(t)) return true;
+  if (!hasPlace(t) && !hasShot(t)) return true;
+  return false;
 }
 
 /** Subject only — Brain writes a new take instead of echoing the last fill. */
 export function sceneCore(text: string): string {
   const t = (text || "").replace(/\s+/g, " ").trim();
   if (!t) return t;
-  if (isShortSubject(t)) return t;
+  const peeled = t.split(
+    /,\s*(?:small compact|lean street|stocky mutt|medium mixed-breed|detailed (?:fur|hands|eyes|skin|anatomy)|pores|uncensored|explicit|nsfw|adult 18|window light|silk|anime illustration|photograph)/i,
+  )[0] || t;
+  const coreSrc = peeled.replace(/\s+/g, " ").trim();
+  if (isShortSubject(coreSrc) && !/detailed fur|overcast|window light/i.test(coreSrc)) return coreSrc;
   const low = t.toLowerCase();
   if (/\bmagical girls?\b|\bmahou shoujo\b/.test(low)) {
     return /\bmagical girls\b/.test(low) ? "magical girls" : "magical girl";
@@ -736,6 +771,9 @@ export function fillGaps(text: string, anime: boolean, rng: () => number, nsfwMo
   }
   if (!hasPlace(lead) && x.place) extra.push(x.place);
   if (!hasShot(lead)) extra.push(x.shot);
+  if (!/\b(center(?:ed)?|in the middle|looking at viewer)\b/i.test(lead)) {
+    extra.push("centered", "subject dead center of the frame", "not on the right", "not on the left");
+  }
   if (!hasLight(lead)) extra.push(x.light);
   if (!/detailed (hands|eyes|skin|fur)/i.test(lead)) {
     extra.push(c.animals.length && !c.girl && !c.man ? "detailed fur" : "detailed hands", "detailed eyes");
@@ -752,84 +790,118 @@ export function fillGaps(text: string, anime: boolean, rng: () => number, nsfwMo
   return keepNeutral(joinScene([lead, ...extra], dirty), lead, dirty ? "sex" : "enhance", nsfwMode);
 }
 
+function personVsAnimalBeat(c: ReturnType<typeof lookCast>, rng: () => number): string {
+  const a = c.animals[0] || "animal";
+  if (c.girl && a === "dog") {
+    return pickFrom(
+      [
+        "she plants her boot in the dog's ribs as it snarls and twists, dirt exploding around them",
+        "the woman kicks, the dog snaps at her calf, both off-balance in the yard",
+        "her kick connects, the mutt yelps then lunges back, teeth at her skirt",
+      ],
+      rng,
+    );
+  }
+  if (c.girl && a === "cat") {
+    return pickFrom(
+      [
+        "she kicks, the cat twists in air, claws out, fur exploding",
+        "the girl swings a boot, the cat slashes her shin and springs aside",
+      ],
+      rng,
+    );
+  }
+  if (c.girl) {
+    return pickFrom(
+      [
+        `she kicks the ${a}, it recoils then comes back in`,
+        `the woman and the ${a} collide, dust and motion`,
+      ],
+      rng,
+    );
+  }
+  return pickFrom(
+    [
+      "they collide mid-air, fur flying, dirt kicked up",
+      "locked together, rolling, claws in coat, teeth at the neck",
+    ],
+    rng,
+  );
+}
+
 function lookFill(text: string, anime: boolean, rng: () => number, nsfwMode = false): string {
   const lead = userLead(text);
   const c = lookCast(lead);
   const x = extrasFor(lead, anime, rng);
   const parts: string[] = [lead];
-  if (c.animals.length) {
-    for (const a of c.animals) parts.push(...animalBits(a, rng));
-    if (c.fight && c.animals.length >= 2) {
+  if (c.goblin) {
+    parts.push(pickFrom(GOBLIN_LOOK.body, rng), pickFrom(GOBLIN_LOOK.head, rng), pickFrom(GOBLIN_LOOK.hide, rng), pickFrom(GOBLIN_LOOK.clothes, rng));
+  } else if (c.orc) {
+    parts.push(pickFrom(ORC_LOOK.body, rng), pickFrom(ORC_LOOK.head, rng), pickFrom(ORC_LOOK.hide, rng), pickFrom(ORC_LOOK.clothes, rng));
+  } else if (c.monster) {
+    parts.push(pickFrom(MONSTER_BODY, rng), pickFrom(MONSTER_HEAD, rng), pickFrom(MONSTER_HIDE, rng), pickFrom(MONSTER_HANDS, rng));
+  }
+  if (c.magical) {
+    parts.push(
+      pickFrom(MAGICAL_GIRL.hair, rng),
+      pickFrom(MAGICAL_GIRL.face, rng),
+      pickFrom(MAGICAL_GIRL.body, rng),
+      pickFrom(MAGICAL_GIRL.costume, rng),
+      pickFrom(MAGICAL_GIRL.wand, rng),
+      pickFrom(MAGICAL_GIRL.pose, rng),
+    );
+    if (isAdult(lead) || nsfwMode) parts.push(pickFrom(MAGICAL_GIRL.nsfw, rng));
+  } else if (c.girl) {
+    if (c.warrior || (c.fight && !c.animals.length)) {
       parts.push(
-        pickFrom(
-          [
-            "they collide mid-air, fur flying, dirt kicked up",
-            "the cat slashes, the dog snaps, both committed",
-            "locked together, rolling, claws in coat, teeth at the neck",
-          ],
-          rng,
-        ),
+        pickFrom(WARRIOR_WOMAN.body, rng),
+        pickFrom(WARRIOR_WOMAN.armor, rng),
+        pickFrom(WARRIOR_WOMAN.weapon, rng),
+        pickFrom(WARRIOR_WOMAN.face, rng),
+        pickFrom(WARRIOR_WOMAN.hair, rng),
       );
+    } else {
+      parts.push(pickFrom(WOMAN_LOOK.body, rng), pickFrom(WOMAN_LOOK.face, rng), pickFrom(WOMAN_LOOK.hair, rng));
+      parts.push(isAdult(lead) || nsfwMode ? pickFrom(SKIMPY_LOOK, rng) : pickFrom(WOMAN_LOOK.clothes, rng));
+      if ((nsfwMode || isAdult(lead)) && !c.animals.length) parts.push(pickFrom(PEOPLE_SEX, rng));
     }
-  } else {
-    if (c.goblin) {
-      parts.push(pickFrom(GOBLIN_LOOK.body, rng), pickFrom(GOBLIN_LOOK.head, rng), pickFrom(GOBLIN_LOOK.hide, rng), pickFrom(GOBLIN_LOOK.clothes, rng));
-    } else if (c.orc) {
-      parts.push(pickFrom(ORC_LOOK.body, rng), pickFrom(ORC_LOOK.head, rng), pickFrom(ORC_LOOK.hide, rng), pickFrom(ORC_LOOK.clothes, rng));
-    } else if (c.monster) {
-      parts.push(pickFrom(MONSTER_BODY, rng), pickFrom(MONSTER_HEAD, rng), pickFrom(MONSTER_HIDE, rng), pickFrom(MONSTER_HANDS, rng));
-    }
-    if (c.magical) {
-      parts[0] = pickFrom(MAGICAL_GIRL.open, rng);
-      parts.push(
-        pickFrom(MAGICAL_GIRL.hair, rng),
-        pickFrom(MAGICAL_GIRL.face, rng),
-        pickFrom(MAGICAL_GIRL.body, rng),
-        pickFrom(MAGICAL_GIRL.costume, rng),
-        pickFrom(MAGICAL_GIRL.wand, rng),
-        pickFrom(MAGICAL_GIRL.pose, rng),
-      );
-      if (isAdult(lead) || nsfwMode) parts.push(pickFrom(MAGICAL_GIRL.nsfw, rng));
-    } else if (c.girl) {
-      if (c.chase && !c.warrior && !c.fight) {
-        parts.push(pickFrom(GIRL_HAIR, rng), pickFrom(GIRL_CLOTHES, rng), pickFrom(GIRL_FACE, rng));
-      } else if (c.warrior || c.fight) {
-        parts.push(
-          pickFrom(WARRIOR_WOMAN.body, rng),
-          pickFrom(WARRIOR_WOMAN.armor, rng),
-          pickFrom(WARRIOR_WOMAN.weapon, rng),
-          pickFrom(WARRIOR_WOMAN.face, rng),
-          pickFrom(WARRIOR_WOMAN.hair, rng),
-        );
-      } else {
-        parts.push(pickFrom(WOMAN_LOOK.body, rng), pickFrom(WOMAN_LOOK.face, rng), pickFrom(WOMAN_LOOK.hair, rng));
-        parts.push(isAdult(lead) || nsfwMode ? pickFrom(SKIMPY_LOOK, rng) : pickFrom(WOMAN_LOOK.clothes, rng));
-        if (nsfwMode || isAdult(lead)) parts.push(pickFrom(PEOPLE_SEX, rng));
-      }
-    }
-    if (c.man && !c.goblin && !c.orc && !c.monster) {
-      parts.push(pickFrom(MAN_LOOK.body, rng), pickFrom(MAN_LOOK.face, rng), pickFrom(MAN_LOOK.hair, rng), pickFrom(MAN_LOOK.clothes, rng));
-    }
-    if (c.fight) {
-      parts.push(pickFrom(FIGHT_BEAT, rng), pickFrom(FIGHT_PLACE, rng), pickFrom(FIGHT_GROUND, rng), pickFrom(FIGHT_WEATHER, rng), pickFrom(FIGHT_FAR, rng));
-    } else if (c.chase) parts.push(pickFrom(CHASE_BEAT, rng));
-    else if (c.nameOnly && !c.goblin && !c.orc && !c.monster && !c.girl && !c.man) {
-      parts.push(
-        pickFrom(["looking slightly aside", "neutral mouth", "soft jaw"], rng),
-        pickFrom(["worn jacket", "simple shirt", "hoodie"], rng),
-        pickFrom(["upper body", "close-up"], rng),
-      );
-    }
+  }
+  if (c.man && !c.goblin && !c.orc && !c.monster) {
+    parts.push(pickFrom(MAN_LOOK.body, rng), pickFrom(MAN_LOOK.face, rng), pickFrom(MAN_LOOK.hair, rng), pickFrom(MAN_LOOK.clothes, rng));
+  }
+  for (const a of c.animals) parts.push(...animalBits(a, rng));
+  if (c.girl && c.animals.length) {
+    parts.push(personVsAnimalBeat(c, rng));
+  } else if (c.fight && c.animals.length >= 2) {
+    parts.push(
+      pickFrom(
+        [
+          "they collide mid-air, fur flying, dirt kicked up",
+          "the cat slashes, the dog snaps, both committed",
+          "locked together, rolling, claws in coat, teeth at the neck",
+        ],
+        rng,
+      ),
+    );
+  }
+  if (c.fight && !c.animals.length) {
+    parts.push(pickFrom(FIGHT_BEAT, rng), pickFrom(FIGHT_PLACE, rng), pickFrom(FIGHT_GROUND, rng), pickFrom(FIGHT_WEATHER, rng), pickFrom(FIGHT_FAR, rng));
+  } else if (c.chase && !c.animals.length) parts.push(pickFrom(CHASE_BEAT, rng));
+  else if (c.nameOnly && !c.goblin && !c.orc && !c.monster && !c.girl && !c.man && !c.animals.length) {
+    parts.push(
+      pickFrom(["looking slightly aside", "neutral mouth", "soft jaw"], rng),
+      pickFrom(["worn jacket", "simple shirt", "hoodie"], rng),
+      pickFrom(["upper body", "close-up"], rng),
+    );
   }
   if (!c.fight && !hasPlace(lead)) parts.push(x.place);
   else if (c.animals.length && !hasPlace(lead)) parts.push(x.place);
-  parts.push(x.shot, x.light);
+  parts.push(x.shot, "centered", "subject dead center of the frame", x.light);
   if (x.ground) parts.push(x.ground);
   if (x.weather) parts.push(x.weather);
   if (x.far) parts.push(x.far);
-  if (c.animals.length && !c.girl && !c.man) {
-    parts.push("detailed fur", "detailed paws");
-  }
+  if (c.animals.length) parts.push("detailed fur", "detailed paws");
+  if (c.girl || c.man) parts.push("detailed hands", "detailed eyes", "detailed skin");
   parts.push(anime ? "anime illustration" : "photograph");
   if (isAdult(lead) || (nsfwMode && (c.girl || c.man))) {
     parts.push("uncensored", "explicit", "nsfw", "adult 18+");
@@ -840,6 +912,83 @@ function lookFill(text: string, anime: boolean, rng: () => number, nsfwMode = fa
     isAdult(lead) || nsfwMode ? "sex" : "person",
     nsfwMode,
   );
+}
+
+/** Full scene from a short line: every named body + the verb + place. Not a tag dump. */
+function sceneProse(text: string, anime: boolean, rng: () => number, nsfwMode = false): string {
+  const lead = userLead(text).replace(/[.,;:]+$/g, "").trim();
+  const c = lookCast(lead);
+  const x = extrasFor(lead, anime, rng);
+  const fightOrBeast = Boolean(c.fight || c.animals.length);
+  const dirty = (isAdult(lead) || nsfwWanted(lead, nsfwMode)) && !fightOrBeast;
+  const who: string[] = [];
+  if (c.girl) {
+    who.push(
+      `the girl is ${pickFrom(WOMAN_LOOK.body, rng)}, ${pickFrom(WOMAN_LOOK.face, rng)}, ${pickFrom(WOMAN_LOOK.hair, rng)}, wearing ${
+        dirty ? pickFrom(SKIMPY_LOOK, rng) : pickFrom(WOMAN_LOOK.clothes, rng)
+      }`,
+    );
+  }
+  if (c.man && !c.goblin && !c.orc && !c.monster) {
+    who.push(
+      `the man is ${pickFrom(MAN_LOOK.body, rng)}, ${pickFrom(MAN_LOOK.face, rng)}, ${pickFrom(MAN_LOOK.hair, rng)}, wearing ${pickFrom(MAN_LOOK.clothes, rng)}`,
+    );
+  }
+  if (c.goblin) {
+    who.push(
+      `the goblin is ${pickFrom(GOBLIN_LOOK.body, rng)}, ${pickFrom(GOBLIN_LOOK.head, rng)}, ${pickFrom(GOBLIN_LOOK.hide, rng)}, ${pickFrom(GOBLIN_LOOK.clothes, rng)}`,
+    );
+  }
+  if (c.orc) {
+    who.push(
+      `the orc is ${pickFrom(ORC_LOOK.body, rng)}, ${pickFrom(ORC_LOOK.head, rng)}, ${pickFrom(ORC_LOOK.hide, rng)}`,
+    );
+  }
+  if (c.monster && !c.goblin && !c.orc) {
+    who.push(
+      `the creature is ${pickFrom(MONSTER_BODY, rng)}, ${pickFrom(MONSTER_HEAD, rng)}, ${pickFrom(MONSTER_HIDE, rng)}`,
+    );
+  }
+  if (c.magical) {
+    who.push(
+      `magical girl look: ${pickFrom(MAGICAL_GIRL.hair, rng)}, ${pickFrom(MAGICAL_GIRL.face, rng)}, ${pickFrom(MAGICAL_GIRL.body, rng)}, ${pickFrom(MAGICAL_GIRL.costume, rng)}, ${pickFrom(MAGICAL_GIRL.wand, rng)}`,
+    );
+  }
+  if (c.warrior && c.girl) {
+    who.push(`${pickFrom(WARRIOR_WOMAN.armor, rng)}, ${pickFrom(WARRIOR_WOMAN.weapon, rng)}`);
+  }
+  for (const a of c.animals) {
+    const bits = animalBits(a, rng);
+    who.push(`the ${a} is ${bits.join(", ")}`);
+  }
+  const act: string[] = [];
+  if (c.girl && c.animals.length) act.push(personVsAnimalBeat(c, rng));
+  else if (c.fight && c.animals.length >= 2) {
+    act.push("they slam together, fur flying, dirt kicked up, neither backing off");
+  } else if (c.fight) {
+    act.push(pickFrom(FIGHT_BEAT, rng));
+  } else if (c.chase) {
+    act.push(pickFrom(CHASE_BEAT, rng));
+  } else if (dirty && (c.girl || c.man)) {
+    act.push(pickFrom(PEOPLE_SEX, rng));
+  }
+  const place = c.fight && !c.animals.length
+    ? `${pickFrom(FIGHT_PLACE, rng)}, ${pickFrom(FIGHT_GROUND, rng)}, ${pickFrom(FIGHT_WEATHER, rng)}`
+    : x.place;
+  const tail = [
+    `setting: ${place}`,
+    `${x.shot}, subject dead center of the frame`,
+    x.light,
+    x.ground,
+    x.weather,
+    x.far,
+    c.animals.length ? "detailed fur, detailed paws, whiskers" : "",
+    c.girl || c.man || c.goblin ? "detailed hands, detailed eyes, detailed skin" : "",
+    anime ? "anime illustration" : "photograph",
+    dirty ? "uncensored, explicit, nsfw, adult 18+" : "",
+  ].filter(Boolean);
+  const out = [lead, ...who, ...act, ...tail].filter(Boolean).join(". ");
+  return keepNeutral(out, lead, dirty ? "sex" : fightOrBeast ? "enhance" : "person", nsfwMode);
 }
 
 function extrasFor(text: string, anime: boolean, rng: () => number): {
@@ -1059,20 +1208,15 @@ function densifyScene(text: string, anime: boolean, rng: () => number) {
 
 const ANIME = {
   shot: [
-    "close-up on the face",
-    "upper body",
-    "medium shot",
-    "full body",
-    "from the side",
-    "low angle full body",
-    "high angle",
-    "over-the-shoulder",
-    "dutch angle",
-    "three-quarter view",
-    "extreme close-up on the eyes",
-    "from behind looking back",
-    "worm's eye",
-    "cowboy shot",
+    "centered full body",
+    "centered upper body",
+    "centered medium shot",
+    "looking at viewer, centered",
+    "cowboy shot, subject centered",
+    "close-up on the face, face in center",
+    "low angle full body, centered",
+    "three-quarter view, centered",
+    "from the side, subject centered",
   ],
   lighting: [
     "soft light",
@@ -1161,18 +1305,13 @@ const ANIME = {
 
 const PHOTO = {
   shot: [
-    "close-up",
-    "medium shot",
-    "wide shot",
-    "over-the-shoulder",
-    "low angle",
-    "high angle",
-    "full body",
-    "profile",
-    "35mm close",
-    "50mm portrait",
-    "85mm face",
-    "from behind",
+    "centered full body",
+    "centered medium shot",
+    "50mm portrait, subject centered",
+    "85mm face in center",
+    "looking at camera, centered",
+    "low angle full body, centered",
+    "wide shot, subject in center",
   ],
   lighting: [
     "window light",
@@ -1350,14 +1489,30 @@ export function writePrompt(opts: {
 
 /** Grok clip: i2v locks the still; t2v invents motion. Motion is the shot, not a still dump. */
 export function grokMotion(typed: string, kind: "still-lock" | "invent" | "continue" = "invent"): string {
-  const lead = userLead(recoverScene(typed) || typed || "")
+  const raw = (typed || "").replace(/\s+/g, " ").trim();
+  const scene = (isPurpleProse(raw) ? recoverScene(raw) || userLead(raw) : raw)
+    .replace(
+      /(?:,\s*)?(?:detailed (?:anatomy|hands|eyes|skin)|pores|subsurface scatter|highly detailed anime still|photoreal|sharp focus, cinematic lighting)(?:,|$)/gi,
+      ",",
+    )
+    .replace(/,\s*,+/g, ",")
+    .replace(/^,|,$/g, "")
     .replace(/\s+/g, " ")
     .trim();
-  const t = lead.toLowerCase();
-  const bits: string[] = [];
+  const t = scene.toLowerCase();
+  const userActs = (
+    scene.match(
+      /\b(?:kicks?|punches?|bashes?|scrabbles?|shield bash(?:es)?|runs?|chases?|kisses?|turns?(?: her| his| their)? head|walks?|thrusts?|fights?|clashes?|leans? in|looks? (?:out|away|back))\b[^,]{0,48}/gi,
+    ) || []
+  )
+    .map((s) => s.trim())
+    .slice(0, 3);
+  const bits: string[] = [...userActs];
   if (/\b(fight|clash|punch|kick|battle|slash|vs|versus)\b/.test(t)) {
-    bits.push("they clash, bodies jolt, camera handheld following the hit, dust and cloth snap");
-  } else if (/\b(fuck|sex|thrust|moan|ride|pound|nsfw)\b/.test(t)) {
+    if (!bits.some((b) => /clash|hit|jolt|kick|punch|bash/i.test(b))) {
+      bits.push("they clash, bodies jolt, camera handheld following the hit, dust and cloth snap");
+    }
+  } else if (/\b(fucks?|sex|thrusts?|moans?|rides?|pounds?|nsfw|rape|gangbang|creampie)\b/.test(t)) {
     bits.push("hips roll, breath, bodies press, camera holds close, skin sheen, continuous motion");
   } else if (/\b(run|chase|flee|sprint)\b/.test(t)) {
     bits.push("running, camera tracks beside, background parallax, hair and cloth stream");
@@ -1366,10 +1521,10 @@ export function grokMotion(typed: string, kind: "still-lock" | "invent" | "conti
   } else if (/\b(kiss|embrace|hug)\b/.test(t)) {
     bits.push("they lean in, slow, breath, camera eases closer");
   } else if (/\b(turn|look|glance|blink)\b/.test(t)) {
-    bits.push("head turns, eyes shift, blink, hair drifts");
+    if (!bits.some((b) => /turn|head|look/i.test(b))) bits.push("head turns, eyes shift, blink, hair drifts");
   } else if (/\b(fly|leap|jump)\b/.test(t)) {
     bits.push("they leap, camera tilts up, cloth and hair trail");
-  } else {
+  } else if (!bits.length) {
     bits.push("natural body motion, breathing, blink, micro weight shift");
   }
   if (/\b(rain|storm|downpour)\b/.test(t)) bits.push("rain streaks, wet hair, droplets on skin, puddles ripple");
@@ -1379,17 +1534,19 @@ export function grokMotion(typed: string, kind: "still-lock" | "invent" | "conti
   if (/\b(close-up|close up|portrait|face)\b/.test(t)) bits.push("slow dolly in, shallow depth");
   else if (/\b(wide|establishing|full body)\b/.test(t)) bits.push("slow push in from wide");
   else bits.push("stable camera, slight push in");
+  const motion = bits.join(", ");
   const lock = "same face, same body, same clothes, same hair, sharp, no morph, no warp, no flicker, no extra limbs";
+  const who = sceneCore(scene) || scene.split(",").slice(0, 2).join(",").trim();
   if (kind === "still-lock") {
-    const core = lead || "the same people from the photo";
-    return `${core}, the exact photo comes alive, ${bits.join(", ")}, ${lock}`;
+    const core = who || "the same people from the photo";
+    return `${core}, the exact photo comes alive, ${motion}, ${lock}`;
   }
   if (kind === "continue") {
-    const core = lead || "the same people";
-    return `${core}, next moment, they keep going, ${bits.join(", ")}, ${lock}`;
+    const core = who || "the same people";
+    return `${core}, next moment, they keep going, ${motion}, ${lock}`;
   }
-  if (!lead) return `${bits.join(", ")}, sharp focus, cinematic lighting, ${lock}`;
-  return `${lead}, ${bits.join(", ")}, ${lock}`;
+  if (!scene) return `${motion}, sharp focus, cinematic lighting, ${lock}`;
+  return `${motion}. ${scene}`;
 }
 export function grokExpand(opts: {
   typed: string;
@@ -1420,10 +1577,19 @@ export function grokExpand(opts: {
       lead,
     );
   const subject = forgeFill ? sceneCore(lead) || lead : lead;
-  if (opts.roll === "random" || /\{[^{}|]+\|/.test(wild)) {
-    const curly = /\{[^{}|]+\|/.test(wild) ? wild : withRandomBlocks(subject, nsfw);
-    const flat = flattenPrompt(curly, opts.seed);
+  if (opts.roll === "random") {
+    return flattenPrompt(withRandomBlocks(subject, nsfw), opts.seed);
+  }
+  if (/\{[^{}|]+\|/.test(wild)) {
+    const flat = flattenPrompt(wild, opts.seed);
     if (!tooClose(flat, subject)) return flat;
+  }
+  if (isShortSubject(subject) || needsSceneFill(subject)) {
+    const essay = flattenPrompt(withRandomBlocks(subject, nsfw), opts.seed);
+    const dressed = sceneProse(subject, anime, mulberry32(opts.seed + 17), nsfwOn);
+    let out = /\{/.test(essay) || essay.split(/\s+/).length < dressed.split(/\s+/).length ? dressed : essay;
+    if (nsfw && !/\buncensored\b/i.test(out)) out = `${out}. uncensored, explicit, nsfw, adult 18+`;
+    return ensureCastLooks(out, subject, anime, mulberry32(opts.seed + 91), nsfwOn);
   }
   const rng = mulberry32(opts.seed + 17);
   let out: string;
@@ -1440,15 +1606,15 @@ export function grokExpand(opts: {
       }),
       opts.seed,
     );
-  } else if (isShortSubject(subject) || forgeFill) {
-    out = lookFill(subject, anime, rng, nsfwOn);
+  } else if (isShortSubject(subject) || forgeFill || needsSceneFill(subject)) {
+    out = sceneProse(subject, anime, rng, nsfwOn);
   } else {
     out = fillGaps(lead, anime, rng, nsfwOn);
   }
   const thin = (s: string) =>
-    tooClose(s, subject) || tooClose(s, raw) || s.split(/\s+/).length <= subject.split(/\s+/).length + 4;
-  if (thin(out) && (isShortSubject(subject) || forgeFill)) {
-    out = lookFill(subject, anime, rng, nsfwOn);
+    tooClose(s, subject) || tooClose(s, raw) || s.split(/\s+/).length <= subject.split(/\s+/).length + 8;
+  if (thin(out) && (isShortSubject(subject) || forgeFill || needsSceneFill(subject))) {
+    out = sceneProse(subject, anime, mulberry32(opts.seed + 23), nsfwOn);
   }
   if (thin(out) && isShortSubject(subject)) {
     out = grokFill(subject, anime, mulberry32(opts.seed + 31));
@@ -1457,7 +1623,35 @@ export function grokExpand(opts: {
     out = flattenPrompt(withRandomBlocks(subject, nsfw), opts.seed);
   }
   if (nsfw && !/\buncensored\b/i.test(out)) out = `${out}, uncensored, explicit, nsfw, adult 18+`;
+  out = ensureCastLooks(out, subject, anime, mulberry32(opts.seed + 91), nsfwOn);
   return out;
+}
+
+/** Last pass: if the user named a girl/dog/goblin, those looks must be in the line. */
+function ensureCastLooks(out: string, lead: string, anime: boolean, rng: () => number, nsfwMode: boolean): string {
+  const src = `${lead} ${out}`;
+  const c = lookCast(src);
+  const extra: string[] = [];
+  if (c.girl && !/\b(hair|eyes|breast|hip|thigh|armor|dress|skirt|jacket)\b/i.test(out)) {
+    extra.push(pickFrom(WOMAN_LOOK.body, rng), pickFrom(WOMAN_LOOK.face, rng), pickFrom(WOMAN_LOOK.hair, rng));
+    extra.push(nsfwMode || isAdult(lead) ? pickFrom(SKIMPY_LOOK, rng) : pickFrom(WOMAN_LOOK.clothes, rng));
+  }
+  if (c.man && !c.goblin && !/\b(beard|jaw|short hair|shirt|coat)\b/i.test(out)) {
+    extra.push(pickFrom(MAN_LOOK.body, rng), pickFrom(MAN_LOOK.face, rng), pickFrom(MAN_LOOK.hair, rng));
+  }
+  if (c.goblin && !/\b(pointed ears|hooked nose|warty|loincloth)\b/i.test(out)) {
+    extra.push(pickFrom(GOBLIN_LOOK.body, rng), pickFrom(GOBLIN_LOOK.head, rng));
+  }
+  for (const a of c.animals) {
+    if (!/\b(fur|whisker|muzzle|paw|hackles|coat|fangs|tail)\b/i.test(out)) {
+      extra.push(...animalBits(a, rng));
+    }
+  }
+  if (c.girl && c.animals.length && !/\b(boot|kick|ribs|snarl|lunges)\b/i.test(out)) {
+    extra.push(personVsAnimalBeat(c, rng));
+  }
+  if (!extra.length) return out;
+  return joinScene([out, ...extra], isAdult(lead) || nsfwMode);
 }
 
 /** Keep the last scene, weave in picks, output one new ordered prompt. */

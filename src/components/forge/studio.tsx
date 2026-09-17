@@ -1379,20 +1379,24 @@ export function Studio() {
         scan,
       );
       if (!filled) {
-        toast.error("Type the edit (remove the jacket, add a hat) then Brain.");
+        toast.error("Type the edit (remove the jacket, add a hat) then Creator.");
         return false;
       }
       skipIdeaRefresh.current = true;
       state.setPrompt(filled);
       setIdeas([filled]);
-      logForge("info", "Brain", "Edit mode — kept the photo, only filled the change");
+      logForge("info", "Creator", "Edit mode — kept the photo, only filled the change");
       return true;
     }
     const line =
       state.mode === "ref2i"
-        ? state.refPrompt.trim() || state.prompt.trim()
-        : state.prompt.trim();
-    const core = sceneCore(line) || line || "an adult";
+        ? state.refPrompt.trim() || state.prompt.trim() || promptRef.current?.value.trim() || ""
+        : state.prompt.trim() || promptRef.current?.value.trim() || "";
+    const core = sceneCore(line) || line;
+    if (!core) {
+      toast.error("Type a subject first, then Creator.");
+      return false;
+    }
     const fam =
       state.settings.stillFamily === "sd15" || guessArch(state.settings.checkpoint) === "sd15"
         ? ("sd15" as const)
@@ -1419,22 +1423,22 @@ export function Studio() {
       const script = formatComicScript(core, comicLayout, { nsfw: state.nsfwMode, seed });
       if (keepBox || isPanelScript(line)) {
         setIdeas([script]);
-        logForge("info", "Brain", "New page beats — tap one to use. Box left as-is.");
+        logForge("info", "Creator", "New page beats — tap one to use. Box left as-is.");
         return true;
       }
       state.setPrompt(script);
       setIdeas([script]);
-      logForge("info", "Brain", `Comic beats for “${core.slice(0, 40)}”`);
+      logForge("info", "Creator", `Comic beats for “${core.slice(0, 40)}”`);
       return true;
     }
     if (keepBox) {
       setIdeas(locals.filter(Boolean).slice(0, 3));
-      logForge("info", "Brain", "New takes — tap one to put it in the box");
+      logForge("info", "Creator", "New takes — tap one to put it in the box");
     } else {
       state.setPrompt(first);
       if (state.mode === "ref2i") state.setRefPrompt(first);
       setIdeas(locals.filter(Boolean).slice(0, 3));
-      logForge("info", "Brain", `Filled “${core.slice(0, 40)}”`);
+      logForge("info", "Creator", `Filled “${core.slice(0, 40)}”`);
     }
     setBrainBusy(true);
     try {
@@ -1448,7 +1452,7 @@ export function Studio() {
         nsfwMode: state.nsfwMode,
       });
       if (!r.ok) {
-        logForge("warn", "Brain", r.message);
+        logForge("warn", "Creator", r.message);
         return true;
       }
       const text = r.text.replace(/\s+/g, " ").trim();
@@ -1460,7 +1464,7 @@ export function Studio() {
       const same = tokenOverlap(text, line) > 0.78 || tokenOverlap(text, first) > 0.9;
       const thin = text.split(/\s+/).length < 12;
       if (lost || same || thin) {
-        logForge("info", "Brain", "Ollama echoed — kept this set");
+        logForge("info", "Creator", "Ollama echoed — kept this set");
         return true;
       }
       skipIdeaRefresh.current = true;
@@ -1474,7 +1478,7 @@ export function Studio() {
         }
         return out;
       });
-      logForge("info", "Brain", `Ollama added a take · ${r.model.split("/").pop()} — tap to use`);
+      logForge("info", "Creator", `Ollama added a take · ${r.model.split("/").pop()} — tap to use`);
       return true;
     } finally {
       setBrainBusy(false);
@@ -1491,8 +1495,12 @@ export function Studio() {
           state.liveScan?.summary ||
           ""
         : state.mode === "ref2i"
-          ? state.refPrompt.trim() || state.prompt.trim()
-          : state.prompt.trim();
+          ? state.refPrompt.trim() || state.prompt.trim() || promptRef.current?.value.trim() || ""
+          : state.prompt.trim() || promptRef.current?.value.trim() || "";
+    if (!raw && state.mode !== "i2i") {
+      toast.error("Type a subject first, then Write.");
+      return;
+    }
     if (state.mode === "i2i") {
       const scan =
         state.liveScan?.summary ||
@@ -1519,7 +1527,7 @@ export function Studio() {
           ? ("flux" as const)
           : ("sdxl" as const);
     const rewritten = grokExpand({
-      typed: woven || sceneUse || "an adult",
+      typed: woven || sceneUse,
       files: state.wildcards.length ? state.wildcards : [],
       seed,
       family: fam,
@@ -1538,7 +1546,23 @@ export function Studio() {
               ? writeExtreme(rewritten, seed)
               : [rewritten, ...writeIdeas(ideaOpts(flavor, woven || sceneUse, seed))];
     const lines = local.map((t, i) => flattenPrompt(t, seed + i)).filter((t) => t && t.trim().toLowerCase() !== (sceneUse || "").toLowerCase());
-    const first = lines[0] || flattenPrompt(rewritten, seed);
+    let first = lines[0] || flattenPrompt(rewritten, seed);
+    if (
+      !first ||
+      first.trim().toLowerCase() === (sceneUse || "").toLowerCase() ||
+      tokenOverlap(first, sceneUse) > 0.88 ||
+      first.split(/\s+/).length < Math.max(12, sceneUse.split(/\s+/).length + 6)
+    ) {
+      first = grokExpand({
+        typed: woven || sceneUse,
+        files: state.wildcards.length ? state.wildcards : [],
+        seed: seed + 4243,
+        family: fam,
+        checkpoint: state.settings.checkpoint,
+        roll: "normal",
+        nsfwMode: state.nsfwMode,
+      });
+    }
     skipIdeaRefresh.current = true;
     state.setPrompt(first);
     if (state.mode === "ref2i") state.setRefPrompt(first);
@@ -1934,6 +1958,11 @@ export function Studio() {
           ? "i2i"
           : useForge.getState().mode;
     const runMeta = MODE_META[runMode];
+    if (runMode === "i2i" && !photoOn && !state.jobs.some((j) => j.resultDataUrl && j.resultKind !== "video")) {
+      toast.error("Drop a photo or tap Edit on a still first.");
+      logForge("warn", "Edit", "No photo to edit");
+      return;
+    }
     const inputs: MediaRef[] = (() => {
       const raw: MediaRef[] =
         runMode === "ref2i"
@@ -2549,10 +2578,10 @@ export function Studio() {
   })();
 
   return (
-    <div className="flex min-h-dvh flex-col bg-bg pb-8 text-fg">
+    <div className="flex min-h-dvh flex-col overflow-x-hidden bg-bg pb-8 text-fg">
       <header className="flex flex-wrap items-center gap-2 px-3 py-3 md:gap-3 md:px-6">
         <p className="text-[15px] font-medium tracking-tight">Forge</p>
-        <span className="text-[11px] tabular-nums text-subtle">219</span>
+        <span className="text-[11px] tabular-nums text-subtle">236</span>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {meta.video ? (
             <select
@@ -2703,8 +2732,8 @@ export function Studio() {
         <div className="px-4 py-2 text-center text-sm font-medium text-danger">{queueBanner}</div>
       ) : null}
 
-      <div className="flex flex-col gap-1 px-2 md:px-4">
-        <div className="flex items-center gap-0.5">
+      <div className="flex min-w-0 flex-col gap-1 px-2 md:px-4">
+        <div className="flex min-w-0 items-center gap-0.5 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {(["image", "video", "combine", "comic", "library", "mixes"] as const).map((g) => (
             <button
               key={g}
@@ -2790,7 +2819,7 @@ export function Studio() {
                       ? "Video"
                       : g === "library"
                         ? "Library"
-                        : "All ckpts"}
+                        : "Mixes"}
             </button>
           ))}
         </div>
@@ -3285,7 +3314,7 @@ export function Studio() {
             className="rounded-full"
             onClick={beginCombine}
           >
-            Combine
+            Add to Combine
           </Button>
           {stageSrc ? (
             <>
@@ -3782,10 +3811,10 @@ export function Studio() {
                 type="button"
                 disabled={brainBusy}
                 className="inline-flex h-11 shrink-0 items-center rounded-full bg-accent px-3 text-sm font-medium text-accent-fg disabled:opacity-60"
-                title={brainOn ? `Fills the prompt. Local brain · ${brainModel}` : "Fills the prompt locally. Turn Ollama on for a smarter rewrite."}
+                title={brainOn ? `Fills the prompt. Local creator · ${brainModel}` : "Fills the prompt locally. Turn Ollama on for a smarter rewrite."}
                 onClick={() => void runBrain()}
               >
-                {brainBusy ? "…" : "Brain"}
+                {brainBusy ? "…" : "Creator"}
               </button>
               </div>
               <div className="mt-1 border-t border-line px-1 pt-2">
@@ -4068,6 +4097,7 @@ export function Studio() {
               More
             </Button>
             {!meta.video ? (
+              <>
               <Button
                 type="button"
                 variant={settings.hires ? "default" : "secondary"}
@@ -4078,6 +4108,20 @@ export function Studio() {
               >
                 {settings.hires ? "Hires on" : "Hires"}
               </Button>
+              <Button
+                type="button"
+                variant={(settings.batchSize || 1) >= 2 ? "default" : "secondary"}
+                size="sm"
+                title="How many stills per Generate (text-to-image)"
+                aria-pressed={(settings.batchSize || 1) >= 2}
+                onClick={() => {
+                  const n = settings.batchSize || 1;
+                  useForge.getState().setSettings({ batchSize: n === 1 ? 2 : n === 2 ? 4 : 1 });
+                }}
+              >
+                {(settings.batchSize || 1) >= 2 ? `Batch ${settings.batchSize}` : "Batch"}
+              </Button>
+              </>
             ) : null}
             {showMore ? (
               <>
@@ -4132,9 +4176,11 @@ export function Studio() {
               variant={dock === "write" ? "default" : "secondary"}
               size="sm"
               className="rounded-full"
+              title="Fills the box into a full scene. Opens the write chips."
               onClick={() => {
                 setChipTab("write");
-                setDock((d) => (d === "write" ? "off" : "write"));
+                setDock("write");
+                void writeIntoBox("enhance");
               }}
             >
               <Sparkles />
@@ -4145,7 +4191,8 @@ export function Studio() {
               className="ml-auto min-h-12 min-w-32 touch-manipulation rounded-full"
               size="lg"
               style={{ WebkitTapHighlightColor: "transparent", touchAction: "manipulation" }}
-              title="Sends the box as-is. Tap Brain or Write to fill it first."
+              title="Sends the box as-is. Tap Creator or Write to fill it first."
+              aria-label={tab === "mixes" ? `Run ${mixPick.length || 0}` : "Generate"}
               onTouchEnd={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
