@@ -351,3 +351,43 @@ export function mergeScan(wd14: ScanResult, local: ScanResult | null): ScanResul
     scannedAt: Date.now(),
   };
 }
+
+const UI_TAG = /\b(text|english text|ui|screenshot|watermark|logo|speech bubble|bar censor|copyright)\b/i;
+
+/** Turn WD14 on each Combine slot into the prompt. Same girl in every shot ≠ “people together”. */
+export function combineFromScans(
+  user: string,
+  scans: { tags: { tag: string }[]; summary?: string }[],
+): { prompt: string; samePerson: boolean; uiJunk: boolean } {
+  const lists = scans.map((s) => s.tags.map((t) => t.tag.toLowerCase()));
+  const uiJunk = lists.some((t) => t.some((x) => UI_TAG.test(x)));
+  const asGirl = lists.filter((t) => t.some((x) => /\b(1girl|girl|woman|solo)\b/.test(x))).length;
+  const asBoy = lists.filter((t) => t.some((x) => /\b(1boy|man|male)\b/.test(x) && !/\bfemale\b/.test(x))).length;
+  const samePerson =
+    scans.length >= 2 && ((asGirl === scans.length && asBoy === 0) || (asBoy === scans.length && asGirl === 0));
+  const per = lists
+    .map((t, i) => {
+      const keep = t.filter((x) => !UI_TAG.test(x)).slice(0, 8);
+      return keep.length ? `ref ${i + 1}: ${keep.join(", ")}` : "";
+    })
+    .filter(Boolean);
+  const noUi = uiJunk ? "no HUD, no UI text, no game menu, no watermark, no overlay" : "";
+  const scene = (user || "").trim() || "same scene, sharp";
+  if (samePerson) {
+    return {
+      prompt: [scene, "one character, same person in every reference, keep face hair clothes body", noUi, per.join("; ")]
+        .filter(Boolean)
+        .join(", "),
+      samePerson,
+      uiJunk,
+    };
+  }
+  return {
+    prompt: [scene, "one photograph, those people together in the same place, keep each face", noUi, per.join("; ")]
+      .filter(Boolean)
+      .join(", "),
+    samePerson,
+    uiJunk,
+  };
+}
+

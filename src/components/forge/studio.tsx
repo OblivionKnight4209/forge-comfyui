@@ -41,7 +41,7 @@ import { browserPoll, browserQueue, browserTag, lanProbe, lanQueue, lanGenerate,
 import { addClipSound, concatClips, fetchLive, fetchRecent, forgetForgeOnThisDevice, isLanRemote, lastFrameOf, mergeLiveJobs, pushLive } from "@/lib/forge/live-room";
 import { lanInfoFn, pollComfyFn, probeComfyFn, queueComfyFn, expandDiskWildcardsFn, peekWildcardFn, tagWithWd14Fn, listWorkflowsFn, queueSavedWorkflowFn, probeOllamaFn, writeLlmIdeasFn, listComfyRecentFn, shredComfyFn, comfyMediaFn, writeStoryFn, appendPromptFn, listPromptsFn, loadTasteFn, voteTasteFn, resetTasteFn } from "@/lib/forge/functions";
 import { extraNegFromTaste, emptyTaste, loraScore, sortCkptsByTaste, tasteLabel, tasteSummary, warnForCheckpoint, type TasteBook, type TasteReason } from "@/lib/forge/taste";
-import { extractFrame, scanFromTags, scanMedia, mergeScan } from "@/lib/forge/detector";
+import { extractFrame, scanFromTags, scanMedia, mergeScan, combineFromScans } from "@/lib/forge/detector";
 import { downloadBlob, embedWorkflowPng, dataUrlToBytes, readPngText, seedFromPngText, seedFromBytes } from "@/lib/forge/png";
 import { useForge } from "@/lib/forge/store";
 import {
@@ -791,8 +791,11 @@ export function Studio() {
       toast.success(
         n < 2
           ? `Combine: ${n} photo — paste or drop ${2 - n} more`
-          : `Combine: ${n} photos. Type the new scene, Generate.`,
+          : `Combine: ${n} photos. Scanning, then type the new scene.`,
       );
+      for (const img of useForge.getState().media.filter((m) => m.kind === "image")) {
+        void scanCombineSlot(img);
+      }
       return;
     }
     if (imgs.length === 1 && vids.length === 0) {
@@ -923,6 +926,8 @@ export function Studio() {
       return n;
     }
     st.addMedia([item]);
+    const added = useForge.getState().media.find((m) => m.id === item.id);
+    if (added) void scanCombineSlot(added);
     return useForge.getState().media.filter((m) => m.kind === "image").length;
   }
 
@@ -1683,6 +1688,29 @@ export function Studio() {
     }
   }
 
+  async function scanCombineSlot(item: { id: string; dataUrl: string; name?: string }) {
+    logForge("info", "Combine", `Scanning ${item.name || "photo"}…`);
+    const scan = await runWd14Scan(item.dataUrl);
+    if (!scan) return scan;
+    useForge.getState().patchMedia(item.id, { scan });
+    useForge.getState().setLiveScan(scan);
+    const tags = scan.tags.slice(0, 8).map((t) => t.tag).join(", ");
+    logForge("info", "Combine", tags ? `Scan ${item.name || "photo"}: ${tags}` : scan.summary);
+    return scan;
+  }
+
+  async function scanAllCombineRefs() {
+    const imgs = useForge.getState().media.filter((m) => m.kind === "image").slice(0, 5);
+    for (const m of imgs) {
+      if (!m.scan?.tags?.length) await scanCombineSlot(m);
+    }
+    return useForge
+      .getState()
+      .media.filter((x) => x.kind === "image")
+      .map((x) => x.scan)
+      .filter((s): s is NonNullable<typeof s> => Boolean(s?.tags?.length));
+  }
+
   async function runWd14Scan(dataUrl: string) {
     let pixels = dataUrl;
     try {
@@ -1832,7 +1860,7 @@ export function Studio() {
             seed: state.seed,
           })
         : "";
-    const userPrompt =
+    let userPrompt =
       tab === "comic"
         ? comicPage
         : runMode === "i2i"
@@ -1878,6 +1906,22 @@ export function Studio() {
         setQueueBanner(msg);
         logForge("warn", "Combine", msg);
         return;
+      }
+      if (tab === "combine" || runMode === "ref2i") {
+        const scans = await scanAllCombineRefs();
+        if (scans.length) {
+          const built = combineFromScans(userPrompt, scans);
+          userPrompt = built.prompt;
+          if (built.samePerson) {
+            logForge("warn", "Combine", "Scan: same person in every photo — locking identity, not ‘people together’.");
+          }
+          if (built.uiJunk) {
+            logForge("warn", "Combine", "Scan: HUD / text on the refs — asking the mix to drop UI.");
+          }
+          logForge("info", "Combine", built.prompt.slice(0, 280));
+        } else {
+          logForge("warn", "Combine", "Scan returned no tags. Combine is flying blind.");
+        }
       }
       setQueueBanner("");
       const r = await lanGenerate({
@@ -2158,7 +2202,7 @@ export function Studio() {
       toast.error("Drop a video first");
       return;
     }
-    const userPrompt =
+    let userPrompt =
       runMode === "i2i"
         ? composeI2iPrompt(state.prompt, {
             remove: state.editRemove,
@@ -2177,6 +2221,18 @@ export function Studio() {
             : "Type a prompt, or hit Write.",
       );
       return;
+    }
+    if (runMode === "ref2i") {
+      const scans = await scanAllCombineRefs();
+      if (scans.length) {
+        const built = combineFromScans(userPrompt, scans);
+        userPrompt = built.prompt;
+        if (built.samePerson) logForge("warn", "Combine", "Scan: same person in every photo — locking identity.");
+        if (built.uiJunk) logForge("warn", "Combine", "Scan: HUD / text on the refs.");
+        logForge("info", "Combine", built.prompt.slice(0, 280));
+      } else {
+        logForge("warn", "Combine", "Scan returned no tags. Combine is flying blind.");
+      }
     }
     const neg = (() => {
       const base = generateNegative(
@@ -2349,7 +2405,9 @@ export function Studio() {
       finalPrompt = stripComicPageTalk(finalPrompt);
     }
     if (runMode === "ref2i" && tab !== "comic") {
-      finalPrompt = `one photograph, the people from every reference photo together in the same place, keep their faces, sharp focus, detailed faces, not a collage, not a split screen, not two frames, not a grid, not a diptych, ${finalPrompt}`;
+      if (!/\bsame person\b|one character/i.test(finalPrompt)) {
+        finalPrompt = `one photograph, the people from every reference photo together in the same place, keep their faces, sharp focus, detailed faces, not a collage, not a split screen, not two frames, not a grid, not a diptych, ${finalPrompt}`;
+      }
     }
     if (tab === "comic" && runMode === "ref2i") {
       finalPrompt = `arrange the reference photos as panels on one comic page with black gutters, sequential, ${finalPrompt}`;
@@ -2646,7 +2704,7 @@ export function Studio() {
     <div className="flex min-h-dvh flex-col overflow-x-hidden bg-bg pb-8 text-fg">
       <header className="flex flex-wrap items-center gap-2 px-3 py-3 md:gap-3 md:px-6">
         <p className="text-[15px] font-medium tracking-tight">Forge</p>
-        <span className="text-[11px] tabular-nums text-subtle">243</span>
+        <span className="text-[11px] tabular-nums text-subtle">244</span>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {meta.video ? (
             <select
@@ -3259,9 +3317,10 @@ export function Studio() {
             <div className="flex flex-wrap justify-center gap-2">
               {[0, 1, 2, 3, 4].map((i) => {
                 const m = media.filter((x) => x.kind === "image")[i];
+                const tags = m?.scan?.tags.slice(0, 4).map((t) => t.tag).join(", ");
                 return (
+                  <div key={i} className="w-24 md:w-28">
                   <button
-                    key={i}
                     type="button"
                     className="size-24 overflow-hidden rounded-xl bg-raised ring-1 ring-line md:size-28"
                     onClick={() => {
@@ -3287,6 +3346,10 @@ export function Studio() {
                       <span className="flex size-full items-center justify-center text-xs text-subtle">{i + 1}</span>
                     )}
                   </button>
+                  <p className="mt-1 line-clamp-2 text-center text-[10px] leading-tight text-muted">
+                    {m ? tags || (m.scan ? "scan…" : "scanning") : ""}
+                  </p>
+                  </div>
                 );
               })}
             </div>

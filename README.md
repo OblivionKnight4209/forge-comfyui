@@ -1,4 +1,4 @@
-# Forge v243
+# Forge v244
 
 Offline studio on your Linux Mint PC. **Forge is the cockpit. ComfyUI is the engine.** Nothing is sent to Grok or any cloud for generate / write / video.
 
@@ -26,14 +26,14 @@ pkill -f "vite|npm run dev" 2>/dev/null || true
 rm -rf "$HOME/forge"
 mkdir -p "$HOME/forge"
 cd "$HOME/Downloads"
-wget -O Forge-offline.zip https://github.com/OblivionKnight4209/forge-comfyui/releases/download/v243/Forge-offline.zip
+wget -O Forge-offline.zip https://github.com/OblivionKnight4209/forge-comfyui/releases/download/v244/Forge-offline.zip
 unzip -o Forge-offline.zip -d "$HOME/forge"
 cd "$HOME/forge"
 chmod +x start-forge.sh
 ./start-forge.sh
 ```
 
-The script must print **Forge v243**. Top-left corner of the page must say **243**. Hard refresh (`Ctrl+Shift+R`). If it still says 219, you unzipped an old zip.
+The script must print **Forge v244**. Top-left corner of the page must say **244**. Hard refresh (`Ctrl+Shift+R`). If it still says 219, you unzipped an old zip.
 
 Keep Comfy running in another terminal:
 
@@ -58,7 +58,7 @@ First launch runs `npm install` once (needs the net). After that Forge is offlin
 |---|---|---|
 | **Image** | One still in the **center** (or a batch grid) | Text → photo. Drop a photo first = edit that photo. |
 | **Video** | Clip in the center | Text → clip, or Play on a still → animate it. Sound muxed after. |
-| **Combine** | 2–5 slots | Mix those photos into **one** new photo (not a blurry split). |
+| **Combine** | 2–5 slots | Each photo is **scanned** first. Tags under the slot. Same girl every shot → identity lock, not “people together”. HUD/text → no UI. |
 | **People** | Character LoRAs by show | Tap a name. The box gets **canon look** (hair, eyes, clothes, show). Creator / Write keep that person, not a generic girl. |
 | **Comic** | Layout + ink chips | One **page** with panels. Image tab never uses this. |
 | **Library** | Comfy input + output | Tap to enlarge. Edit / Mix / Play send it to that tab. Shred deletes. |

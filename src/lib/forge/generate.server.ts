@@ -101,7 +101,9 @@ export async function runGenerateIntent(intent: GenerateIntent) {
   if (!i2i && !combining && qualityWantsHires(intent.quality || [])) settings.hires = true;
   const stillPrompt = comicJob ? wrapped : stripComicPageTalk(wrapped);
   const sent = combining
-    ? `one photograph, the people from every reference photo together in the same place, keep their faces, sharp focus, detailed faces, not a collage, not a split screen, not a grid, ${stripComicPageTalk(promptIn)}`
+    ? /\bsame person\b|one character/i.test(promptIn)
+      ? stripComicPageTalk(promptIn)
+      : `one photograph, the people from every reference photo together in the same place, keep their faces, sharp focus, detailed faces, not a collage, not a split screen, not a grid, ${stripComicPageTalk(promptIn)}`
     : i2i
     ? /same art style/i.test(promptIn)
       ? promptIn

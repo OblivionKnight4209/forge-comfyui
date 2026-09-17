@@ -125,6 +125,25 @@ export type WildcardFile = {
   lines: string[];
 };
 
+export type DetectedBox = {
+  id: string;
+  label: string;
+  confidence: number;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+};
+
+export type ScanResult = {
+  summary: string;
+  tags: { tag: string; confidence: number }[];
+  boxes: DetectedBox[];
+  palette: string[];
+  notes: string[];
+  scannedAt: number;
+};
+
 export type MediaRef = {
   id: string;
   kind: "image" | "video";
@@ -133,6 +152,7 @@ export type MediaRef = {
   folder?: "input" | "output";
   width?: number;
   height?: number;
+  scan?: ScanResult;
 };
 
 const GENERIC_STILL = /^(still|edit|continue|liked|last|photo)(\.png|\.jpg|\.jpeg|\.webp)?$/i;
@@ -167,25 +187,6 @@ export function sameStill(
   const kb = stillKey(b.name, b.dataUrl);
   return Boolean(ka && kb && ka === kb);
 }
-
-export type DetectedBox = {
-  id: string;
-  label: string;
-  confidence: number;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-};
-
-export type ScanResult = {
-  summary: string;
-  tags: { tag: string; confidence: number }[];
-  boxes: DetectedBox[];
-  palette: string[];
-  notes: string[];
-  scannedAt: number;
-};
 
 export type JobStatus = "held" | "queued" | "running" | "done" | "error";
 

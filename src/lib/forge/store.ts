@@ -93,6 +93,7 @@ type ForgeState = {
   setShowBoxes: (show: boolean) => void;
   addMedia: (items: MediaRef[]) => void;
   setMedia: (items: MediaRef[]) => void;
+  patchMedia: (id: string, patch: Partial<MediaRef>) => void;
   removeMedia: (id: string) => void;
   clearMedia: () => void;
   upsertLora: (lora: LoraEntry) => void;
@@ -243,6 +244,8 @@ export const useForge = create<ForgeState>()(
         set({ media: [...cur, ...extra].slice(0, 5) });
       },
       setMedia: (items) => set({ media: items.slice(0, 5), activeJobId: null }),
+      patchMedia: (id, patch) =>
+        set({ media: get().media.map((m) => (m.id === id ? { ...m, ...patch } : m)) }),
       removeMedia: (id) => set({ media: get().media.filter((m) => m.id !== id) }),
       clearMedia: () => set({ media: [] }),
       upsertLora: (lora) => {

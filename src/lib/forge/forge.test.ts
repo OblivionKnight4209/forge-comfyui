@@ -68,7 +68,7 @@ import { applyVote, emptyTaste, extraNegFromTaste, ckptScore, sortCkptsByTaste, 
 import { pickBrainModel, cleanBrainOut, brainSystem } from "./brain.ts";
 import { designClipAudio, ensureVoice } from "./clip-sound.ts";
 import { embedWorkflowPng, readPngText, seedFromPngText, seedFromBytes } from "./png.ts";
-import { scanFromTags, boxesFromTags, mergeScan } from "./detector.ts";
+import { scanFromTags, boxesFromTags, mergeScan, combineFromScans } from "./detector.ts";
 import { buildEditPrompt, composeI2iPrompt, expandEditFields, inpaintMaskText } from "./edit-prompt.ts";
 import { characterBio } from "./cast.ts";
 import type { ComfySettings, LoraEntry, Mode } from "./types.ts";
@@ -1820,6 +1820,24 @@ describe("detector tags", () => {
     assert.ok(m.tags.some((t) => t.tag === "1girl"));
     assert.equal(m.boxes[0]?.label, "person");
     assert.equal(m.palette[0], "red");
+  });
+  it("combineFromScans locks identity when every ref is 1girl", () => {
+    const a = scanFromTags("1girl, solo, animal ears, tail, orange hair");
+    const b = scanFromTags("1girl, solo, from behind, tail, english text");
+    const r = combineFromScans("in a forest", [a, b]);
+    assert.equal(r.samePerson, true);
+    assert.equal(r.uiJunk, true);
+    assert.match(r.prompt, /same person/i);
+    assert.match(r.prompt, /no HUD|no UI/i);
+    assert.match(r.prompt, /forest/i);
+    assert.doesNotMatch(r.prompt, /those people together/i);
+  });
+  it("combineFromScans keeps two people when tags differ", () => {
+    const a = scanFromTags("1girl, red hair");
+    const b = scanFromTags("1boy, black hair");
+    const r = combineFromScans("at a bar", [a, b]);
+    assert.equal(r.samePerson, false);
+    assert.match(r.prompt, /together/i);
   });
 });
 
