@@ -772,7 +772,7 @@ export function guessLoraLane(name: string): LoraLane {
   if (/\bwan\b|wan2|wan22/.test(base) && !/swan/.test(base)) return "wan";
   if (/pony|pdxl|score.?9/.test(base)) return "pony";
   if (
-    /illustrious|noobai|\bnoob\b|anima|\bilxl\b|illustriousxl|(?:^|[_-])il(?:[_.-]|$)/.test(base)
+    /illustrious|noobai|\bnoob\b|anima|\bilxl\b|illustriousxl|illuxl|(?:^|[_-])il(?:[_.-]|$)/.test(base)
   ) {
     return "illustrious";
   }
@@ -862,6 +862,9 @@ export function loraTriggerFromFilename(filename: string) {
   return stem.length > 1 ? stem : "";
 }
 
+const LORA_HARD_ACT =
+  /pussy|penis|cock|dick|clit|cervix|\bsex\b|fuck|\banal\b|oral|tentacle|masturb|\bcum\b|semen|dildo|bead|rape|bdsm|bondage|ahegao|throat|creampie|bukkake|gangbang|grool|fellatio|cunnilingus|handjob|footjob|paizuri|mating|impregn|ovipos|vomit|choke|cameltoe|sheathe|facesit|insert|bukkake/i;
+
 const LORA_ACT =
   /pussy|penis|cock|dick|clit|cervix|sex|fuck|anal|oral|tentacle|masturb|cum|semen|dildo|bead|rape|bdsm|bondage|pose|detail|realism|slider|style|panties|thong|nude|naked|breast|boob|nipple|ahegao|throat|creampie|bukkake|gangbang|controlnet|inpaint|canny|tile|upscale|helper|enhanc|watermark|detect|yolo|embed|hypernet|negative|add[_ -]?detail|more[_ -]?details|lightning|turbo|\blcm\b|motion|wan2|i2v|t2v|hires|ultra|\b4x\b|filmic|outfit|clothes|clothing|lingerie|grool|insert|object|choke|vomit|birth|impregn|ovipos|zombie|slime|xenomorph|canine|equine|porcine|insect|sheathe|spread|peek|juice|cameltoe|highleg|wardrobe|torn|finger|facesit|fellatio|cunnilingus|handjob|footjob|paizuri|mating|doggy|missionary|prone|spank|whip|collar|leash|gag|exposure|smear|filthy|nsfw[_ -]?master|noise|concept|helper|fix.?hand|body.?detect/i;
 
@@ -889,6 +892,11 @@ export function characterShow(filename: string): string {
   if (/yami.?healer/.test(s)) return "Yami Healer";
   if (/rosario/.test(s)) return "Rosario Vampire";
   if (/spy.?family|anya.?forger/.test(s)) return "Spy x Family";
+  if (/hidden.?dungeon/.test(s)) return "Hidden Dungeon";
+  if (/nonbiri|nouka/.test(s)) return "Isekai Nonbiri Nouka";
+  if (/noelle|black.?clover/.test(s)) return "Black Clover";
+  if (/harpy|naga|lamia|kitsune|werewolf|hippogriff|basilisk|cockatrice|kelpie|tengu|golem|mge|monster.?musume/.test(s))
+    return "Creatures";
   return "Other";
 }
 
@@ -897,13 +905,21 @@ export function isCharacterLora(filename: string): boolean {
   const base = (filename || "").replace(/\\/g, "/").split("/").pop() || "";
   const stem = base.replace(/\.(safetensors|ckpt|pt|sft)$/i, "");
   if (!stem || isNotALora(base)) return false;
+  const named =
+    SHOW_HINT.test(stem) ||
+    /^chara_/i.test(stem) ||
+    /_IlluXL/i.test(stem) ||
+    /shield.?hero/i.test(stem) ||
+    /girlpack/i.test(stem) ||
+    /[A-Z][a-z]{2,}[A-Z][a-z]{2,}/.test(stem) ||
+    /[A-Z][a-z]{2,}_[A-Z][a-z]{2,}/.test(stem);
+  if (LORA_HARD_ACT.test(stem) && !named) return false;
+  if (named) return true;
   if (LORA_ACT.test(stem)) return false;
-  if (SHOW_HINT.test(stem)) return true;
-  if (/^chara_/i.test(stem) || /_IlluXL/i.test(stem)) return true;
   const trigger = loraTriggerFromFilename(base);
   if (!trigger || trigger.length < 3) return false;
   const words = trigger.split(/\s+/).filter((w) => /^[A-Za-z][A-Za-z']{2,}$/.test(w));
-  if (words.length < 1 || words.length > 4) return false;
+  if (words.length < 1 || words.length > 6) return false;
   if (words.length === 1 && /^(detail|realism|style|helper|slider|noise|quality|fix|hands|body|face|light|dark)$/i.test(words[0]!)) {
     return false;
   }

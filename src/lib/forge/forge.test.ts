@@ -1185,7 +1185,11 @@ describe("loras", () => {
     assert.equal(isCharacterLora("Overlord_Albedo_IlluXL.safetensors"), true);
     assert.equal(isCharacterLora("Raphtalia-shield-hero-illustrious.safetensors"), true);
     assert.equal(isCharacterLora("chara_MushokuTensei_ErisBoreasGreyrat_v1.safetensors"), true);
-    assert.equal(isCharacterLora("Alice Starga2.safetensors"), true);
+    assert.equal(isCharacterLora("jibril-ponyXL-v0.9.safetensors"), true);
+    assert.equal(isCharacterLora("Claire_Redfield.safetensors"), true);
+    assert.equal(isCharacterLora("Noelle_Silva_r1.safetensors"), true);
+    assert.equal(isCharacterLora("ARankPartyStyle_IXL.safetensors"), true);
+    assert.equal(isCharacterLora("HighschoolDxD_AsiaArgentoXL.safetensors"), true);
     assert.equal(isCharacterLora("groolpanties.safetensors"), false);
     assert.equal(characterShow("DanMachi_LilirucaArde_IlluXL.safetensors"), "DanMachi");
     assert.match(characterLabel("HighSchoolDxDHERO_RiasGremory_IlluXL.safetensors"), /Rias/i);

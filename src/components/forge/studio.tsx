@@ -299,14 +299,27 @@ export function Studio() {
     const fam = familyMatch.family;
     const q = peopleQ.trim().toLowerCase();
     return loras
-      .filter((l) => isCharacterLora(l.filename) && loraFitsCheckpoint(l.filename, fam, ckpt))
+      .filter((l) => !isNotALora(l.filename))
+      .filter((l) => {
+        if (isCharacterLora(l.filename)) return true;
+        if (q.length < 2) return false;
+        return (
+          characterLabel(l.filename).toLowerCase().includes(q) || l.filename.toLowerCase().includes(q)
+        );
+      })
       .filter(
         (l) =>
           !q ||
           characterLabel(l.filename).toLowerCase().includes(q) ||
-          l.filename.toLowerCase().includes(q),
+          l.filename.toLowerCase().includes(q) ||
+          characterShow(l.filename).toLowerCase().includes(q),
       )
-      .sort((a, b) => characterLabel(a.filename).localeCompare(characterLabel(b.filename)));
+      .sort((a, b) => {
+        const af = loraFitsCheckpoint(a.filename, fam, ckpt) ? 0 : 1;
+        const bf = loraFitsCheckpoint(b.filename, fam, ckpt) ? 0 : 1;
+        if (af !== bf) return af - bf;
+        return characterLabel(a.filename).localeCompare(characterLabel(b.filename));
+      });
   }, [loras, familyMatch.family, settings.checkpoint, peopleQ]);
 
   useEffect(() => {
@@ -2628,7 +2641,7 @@ export function Studio() {
     <div className="flex min-h-dvh flex-col overflow-x-hidden bg-bg pb-8 text-fg">
       <header className="flex flex-wrap items-center gap-2 px-3 py-3 md:gap-3 md:px-6">
         <p className="text-[15px] font-medium tracking-tight">Forge</p>
-        <span className="text-[11px] tabular-nums text-subtle">241</span>
+        <span className="text-[11px] tabular-nums text-subtle">242</span>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {meta.video ? (
             <select
@@ -3118,33 +3131,44 @@ export function Studio() {
                 <div key={group}>
                   <p className="mb-1 text-[11px] uppercase tracking-wide text-muted">{group}</p>
                   <div className="flex flex-wrap gap-1.5">
-                    {list.map((l) => (
+                    {list.map((l) => {
+                      const fit = loraFitsCheckpoint(l.filename, familyMatch.family, settings.checkpoint);
+                      const lane = guessLoraLane(l.filename);
+                      return (
                       <button
                         key={l.id}
                         type="button"
-                        title={l.filename}
+                        title={
+                          fit
+                            ? l.filename
+                            : `${l.filename} — needs a ${lane} mix. Generate skips it on this checkpoint.`
+                        }
                         onClick={() => toggleCharacter(l)}
                         className={
                           l.enabled
-                            ? "h-9 max-w-[14rem] truncate rounded-full bg-accent px-3 text-sm text-accent-fg"
-                            : "h-9 max-w-[14rem] truncate rounded-full bg-raised px-3 text-sm text-fg"
+                            ? "h-9 max-w-[16rem] truncate rounded-full bg-accent px-3 text-sm text-accent-fg"
+                            : fit
+                              ? "h-9 max-w-[16rem] truncate rounded-full bg-raised px-3 text-sm text-fg"
+                              : "h-9 max-w-[16rem] truncate rounded-full bg-raised px-3 text-sm text-fg opacity-50"
                         }
                       >
                         {characterLabel(l.filename)}
+                        {fit ? "" : ` · ${lane}`}
                       </button>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               ))}
             </div>
             {!peopleLoras.length ? (
               <p className="text-sm text-subtle">
-                {loras.some((l) => isCharacterLora(l.filename))
-                  ? "Those person LoRAs do not fit this mix. Switch to an Illustrious / Anima checkpoint in Settings."
-                  : "No person LoRAs yet. Move the .safetensors files into ~/comfy/ComfyUI/models/loras and restart Comfy."}
+                No person LoRAs yet. Move the .safetensors into ~/comfy/ComfyUI/models/loras, restart Comfy, then refresh this page.
               </p>
             ) : (
-              <p className="text-xs text-subtle">{peopleLoras.length} people on this mix · tap again to turn off</p>
+              <p className="text-xs text-subtle">
+                {peopleLoras.length} people · faded = wrong mix for the current checkpoint (still listed). Tap again to turn off.
+              </p>
             )}
           </div>
         ) : batchStills.length > 1 ? (
@@ -4079,33 +4103,44 @@ export function Studio() {
                       <div key={group}>
                         <p className="px-1 text-[10px] uppercase tracking-wide text-muted">{group}</p>
                         <div className="flex flex-wrap gap-1.5">
-                          {list.map((l) => (
+                          {list.map((l) => {
+                            const fit = loraFitsCheckpoint(l.filename, familyMatch.family, settings.checkpoint);
+                            const lane = guessLoraLane(l.filename);
+                            return (
                             <button
                               key={l.id}
                               type="button"
-                              title={l.filename}
+                              title={
+                                fit
+                                  ? l.filename
+                                  : `${l.filename} — needs a ${lane} mix`
+                              }
                               onClick={() => toggleCharacter(l)}
                               className={
                                 l.enabled
-                                  ? "h-9 max-w-[12rem] truncate rounded-full bg-accent px-3 text-xs text-accent-fg"
-                                  : "h-9 max-w-[12rem] truncate rounded-full bg-raised px-3 text-xs text-fg"
+                                  ? "h-9 max-w-[14rem] truncate rounded-full bg-accent px-3 text-xs text-accent-fg"
+                                  : fit
+                                    ? "h-9 max-w-[14rem] truncate rounded-full bg-raised px-3 text-xs text-fg"
+                                    : "h-9 max-w-[14rem] truncate rounded-full bg-raised px-3 text-xs text-fg opacity-50"
                               }
                             >
                               {characterLabel(l.filename)}
+                              {fit ? "" : ` · ${lane}`}
                             </button>
-                          ))}
+                            );
+                          })}
                         </div>
                       </div>
                     ))}
                   </div>
                   {!peopleLoras.length ? (
                     <p className="text-xs text-subtle">
-                      {loras.some((l) => isCharacterLora(l.filename))
-                        ? "Those person LoRAs do not fit this mix. Switch mix (Illustrious for Hestia/Raphtalia, 1.5 for 1.5 people)."
-                        : "No person LoRAs on disk yet. Drop named files in ~/comfy/ComfyUI/models/loras (Hestia, Raphtalia, Alice…)."}
+                      No person LoRAs on disk yet. Drop named files in ~/comfy/ComfyUI/models/loras and restart Comfy.
                     </p>
                   ) : (
-                    <p className="text-[11px] text-subtle">{peopleLoras.length} people · tap again to turn off</p>
+                    <p className="text-[11px] text-subtle">
+                      {peopleLoras.length} people · faded = other mix. Tap again to turn off.
+                    </p>
                   )}
                 </div>
               ) : null}
