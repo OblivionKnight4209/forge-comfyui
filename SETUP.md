@@ -110,9 +110,9 @@ cp /tmp/pose-gal/Krea2-Pose-Library-for-EasyUse/samples/*.webp "$EASY/samples/"
 
 ## How to use Forge
 
-1. Comfy running, Forge v173+, header **LLM** green, **ckpt** count not “No ComfyUI”.
+1. Comfy running, Forge header **LLM** green, **ckpt** count not “No ComfyUI”.
 2. Pick a checkpoint that matches the LoRA (Illustrious LoRA → Dasiwa / novaAnime XL, not CuteKittenMix).
-3. Type a scene. **Write prompt** (or **Sex**) asks Skynet for 3 graphic ideas. Click one.
+3. Type a scene. **Write prompt** (or **Sex**) asks the local writer for 3 graphic ideas. Click one.
 4. **Generate** sends your box as-is to Comfy (does not rewrite).
 5. Drop a photo → **Edit photo** (img2img). Strength slider = how hard it overwrites.
 6. `__hair__` chips insert a wildcard. **Roll** picks a line from `wildcards/`.
@@ -122,20 +122,22 @@ cp /tmp/pose-gal/Krea2-Pose-Library-for-EasyUse/samples/*.webp "$EASY/samples/"
 
 ---
 
-## Update Forge
+## Update Forge (always GitHub)
 
-https://github.com/OblivionKnight4209/forge-comfyui/releases
+Repo: https://github.com/OblivionKnight4209/forge-comfyui  
+Releases: https://github.com/OblivionKnight4209/forge-comfyui/releases  
+Latest zip (follows newest tag): https://github.com/OblivionKnight4209/forge-comfyui/releases/latest/download/Forge-offline.zip
 
 ```bash
 pkill -f "vite|npm run dev" 2>/dev/null || true
 rm -rf ~/forge && mkdir -p ~/forge
 cd ~/Downloads
-wget -O Forge-offline.zip https://github.com/OblivionKnight4209/forge-comfyui/releases/download/v219/Forge-offline.zip
+wget -O Forge-offline.zip https://github.com/OblivionKnight4209/forge-comfyui/releases/latest/download/Forge-offline.zip
 unzip -o Forge-offline.zip -d ~/forge
 cd ~/forge && chmod +x start-forge.sh && ./start-forge.sh
 ```
 
-Top-left must match the zip version.
+Top-left must match the zip version printed by `start-forge.sh`.
 
 ---
 
@@ -170,4 +172,4 @@ ollama pull huihui_ai/qwen2.5-abliterate:3b
 ## GitHub
 
 Repo: https://github.com/OblivionKnight4209/forge-comfyui  
-Releases: zip per version (`Forge-offline.zip`).
+Releases: zip per version (`Forge-offline.zip`). Always use `/releases/latest/download/Forge-offline.zip` so you do not have to change the version number.
