@@ -1,0 +1,32 @@
+name: release
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - VERSION
+      - start-forge.sh
+      - .github/workflows/release.yml
+permissions:
+  contents: write
+jobs:
+  zip:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pack
+        run: |
+          VER=$(tr -d '[:space:]' < VERSION || echo 233)
+          echo "version=$VER" >> "$GITHUB_ENV"
+          rm -f Forge-offline.zip
+          zip -r Forge-offline.zip . -x '.git/*' '.github/*' 'node_modules/*' '*.zip'
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="v${{ env.version }}"
+          gh release delete "$TAG" --yes --cleanup-tag || true
+          gh release create "$TAG" Forge-offline.zip \
+            --title "Forge $TAG" \
+            --notes "Forge $TAG — unzip and run start-forge.sh" \
+            --latest
