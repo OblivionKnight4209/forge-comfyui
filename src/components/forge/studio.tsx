@@ -55,6 +55,8 @@ import {
   loraFitsCheckpoint,
   guessLoraLane,
   resolveLoraName,
+  isCharacterLora,
+  characterLabel,
   CKPT_STYLES,
   checkpointMatchesStyle,
   guessStyles,
@@ -234,7 +236,8 @@ export function Studio() {
   const [queueBanner, setQueueBanner] = useState("");
   const [typeQ, setTypeQ] = useState("");
   const [showMore, setShowMore] = useState(false);
-  const [dock, setDock] = useState<"off" | "write" | "look">("off");
+  const [dock, setDock] = useState<"off" | "write" | "look" | "people">("off");
+  const [peopleQ, setPeopleQ] = useState("");
   const [wildOpen, setWildOpen] = useState<{
     name: string;
     total: number;
@@ -290,6 +293,20 @@ export function Studio() {
     meta.video ? settings.wanUnet || settings.checkpoint : settings.checkpoint || settings.fluxUnet,
   );
   const familyMatch = compatibleLoras(loras, mode, family);
+  const peopleLoras = useMemo(() => {
+    const ckpt = settings.checkpoint;
+    const fam = familyMatch.family;
+    const q = peopleQ.trim().toLowerCase();
+    return loras
+      .filter((l) => isCharacterLora(l.filename) && loraFitsCheckpoint(l.filename, fam, ckpt))
+      .filter(
+        (l) =>
+          !q ||
+          characterLabel(l.filename).toLowerCase().includes(q) ||
+          l.filename.toLowerCase().includes(q),
+      )
+      .sort((a, b) => characterLabel(a.filename).localeCompare(characterLabel(b.filename)));
+  }, [loras, familyMatch.family, settings.checkpoint, peopleQ]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = "void";
@@ -1496,6 +1513,17 @@ export function Studio() {
     }
   }
 
+  function toggleCharacter(l: LoraEntry) {
+    const on = !l.enabled;
+    const words = (l.triggerWords.length ? l.triggerWords : [loraTriggerFromFilename(l.filename)]).filter(Boolean);
+    useForge.getState().upsertLora({ ...l, enabled: on, triggerWords: words });
+    const trigger = words[0] || characterLabel(l.filename);
+    if (!trigger) return;
+    const box = useForge.getState().prompt;
+    const hit = new RegExp(`\\b${trigger.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(box);
+    if (on && !hit) useForge.getState().setPrompt(box.trim() ? `${trigger}, ${box}` : trigger);
+  }
+
   async function writeIntoBox(flavor: PromptFlavor) {
     try {
     const state = useForge.getState();
@@ -2598,7 +2626,7 @@ export function Studio() {
     <div className="flex min-h-dvh flex-col overflow-x-hidden bg-bg pb-8 text-fg">
       <header className="flex flex-wrap items-center gap-2 px-3 py-3 md:gap-3 md:px-6">
         <p className="text-[15px] font-medium tracking-tight">Forge</p>
-        <span className="text-[11px] tabular-nums text-subtle">238</span>
+        <span className="text-[11px] tabular-nums text-subtle">239</span>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {meta.video ? (
             <select
@@ -3956,6 +3984,46 @@ export function Studio() {
                 ))}
               </div>
               ) : null}
+              {dock === "people" ? (
+                <div className="space-y-2 px-1 pb-2">
+                  <p className="text-xs text-muted">
+                    Person / show characters on disk that fit this mix. Tap one — the name stays in the box and that LoRA turns on. Not sex-act LoRAs.
+                    {tab === "video" ? " WAN video ignores XL people LoRAs; generate the still on Image first." : ""}
+                  </p>
+                  <Input
+                    value={peopleQ}
+                    onChange={(e) => setPeopleQ(e.target.value)}
+                    placeholder="Find Hestia, Raphtalia, Alice…"
+                    className="h-9 bg-bg text-sm"
+                  />
+                  <div className="flex max-h-40 flex-wrap gap-1.5 overflow-auto">
+                    {peopleLoras.map((l) => (
+                      <button
+                        key={l.id}
+                        type="button"
+                        title={l.filename}
+                        onClick={() => toggleCharacter(l)}
+                        className={
+                          l.enabled
+                            ? "h-9 max-w-[12rem] truncate rounded-full bg-accent px-3 text-xs text-accent-fg"
+                            : "h-9 max-w-[12rem] truncate rounded-full bg-raised px-3 text-xs text-fg"
+                        }
+                      >
+                        {characterLabel(l.filename)}
+                      </button>
+                    ))}
+                  </div>
+                  {!peopleLoras.length ? (
+                    <p className="text-xs text-subtle">
+                      {loras.some((l) => isCharacterLora(l.filename))
+                        ? "Those person LoRAs do not fit this mix. Switch mix (Illustrious for Hestia/Raphtalia, 1.5 for 1.5 people)."
+                        : "No person LoRAs on disk yet. Drop named files in ~/comfy/ComfyUI/models/loras (Hestia, Raphtalia, Alice…)."}
+                    </p>
+                  ) : (
+                    <p className="text-[11px] text-subtle">{peopleLoras.length} people · tap again to turn off</p>
+                  )}
+                </div>
+              ) : null}
             </>
           )}
           {ideas.length > 0 && dock === "write" ? (
@@ -4198,6 +4266,16 @@ export function Studio() {
               onClick={() => setDock((d) => (d === "look" ? "off" : "look"))}
             >
               Look
+            </Button>
+            <Button
+              type="button"
+              variant={dock === "people" ? "default" : "secondary"}
+              size="sm"
+              className="rounded-full"
+              title="Person / show-character LoRAs that fit this mix. Tap one — name stays in the box."
+              onClick={() => setDock((d) => (d === "people" ? "off" : "people"))}
+            >
+              People {peopleLoras.filter((l) => l.enabled).length ? peopleLoras.filter((l) => l.enabled).length : ""}
             </Button>
             <Button
               type="button"
@@ -5254,10 +5332,13 @@ function LoraCard({
 }) {
   const [q, setQ] = useState("");
   const [loraFam, setLoraFam] = useState<"all" | "sd15" | "sdxl" | "flux" | "wan">("all");
+  const [kind, setKind] = useState<"people" | "acts" | "all">("people");
   const comfy = useForge((s) => s.comfy);
   const needle = q.trim().toLowerCase();
   const shown = loras
     .filter((l) => {
+      if (kind === "people" && !isCharacterLora(l.filename)) return false;
+      if (kind === "acts" && isCharacterLora(l.filename)) return false;
       if (loraFam !== "all") {
         const lane = guessLoraLane(l.filename);
         if (loraFam === "sdxl") {
@@ -5272,9 +5353,20 @@ function LoraCard({
   return (
     <div className="space-y-3">
       <p className="text-sm text-muted">
-        Toggle at most two. Type the name in the prompt. Generate skips 1.5 LoRAs on XL mixes
-        (that is the “lora key not loaded” spam). Pony stays off Illustrious. WAN only on video.
+        People = named characters (Hestia, Raphtalia). Acts = sex/pose/detail LoRAs. Toggle at most two people. Generate skips a LoRA that does not fit this mix.
       </p>
+      <div className="flex flex-wrap gap-1">
+        {(["people", "acts", "all"] as const).map((k) => (
+          <button
+            key={k}
+            type="button"
+            className={cn("h-8 rounded-full px-3 text-xs", kind === k ? "bg-accent text-accent-fg" : "bg-bg text-muted")}
+            onClick={() => setKind(k)}
+          >
+            {k === "people" ? "People" : k === "acts" ? "Acts" : "Everything"}
+          </button>
+        ))}
+      </div>
       <div className="flex flex-wrap gap-1">
         {(["all", "sdxl", "sd15", "flux", "wan"] as const).map((f) => (
           <button
@@ -5308,7 +5400,7 @@ function LoraCard({
         </p>
       )}
       <Input
-        placeholder="Search LoRAs — mara, alice, ninja…"
+        placeholder="Search people — hestia, raphtalia, alice…"
         value={q}
         onChange={(e) => setQ(e.target.value)}
         autoFocus

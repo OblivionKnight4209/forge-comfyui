@@ -862,6 +862,38 @@ export function loraTriggerFromFilename(filename: string) {
   return stem.length > 1 ? stem : "";
 }
 
+const LORA_ACT =
+  /pussy|penis|cock|dick|clit|cervix|sex|fuck|anal|oral|tentacle|masturb|cum|semen|dildo|bead|rape|bdsm|bondage|pose|detail|realism|slider|style|panties|thong|nude|naked|breast|boob|nipple|ahegao|throat|creampie|bukkake|gangbang|controlnet|inpaint|canny|tile|upscale|helper|enhanc|watermark|detect|yolo|embed|hypernet|negative|add[_ -]?detail|more[_ -]?details|lightning|turbo|\blcm\b|motion|wan2|i2v|t2v|hires|ultra|\b4x\b|filmic|outfit|clothes|clothing|lingerie|grool|insert|object|choke|vomit|birth|impregn|ovipos|zombie|slime|xenomorph|canine|equine|porcine|insect|sheathe|spread|peek|juice|cameltoe|highleg|wardrobe|torn|finger|facesit|fellatio|cunnilingus|handjob|footjob|paizuri|mating|doggy|missionary|prone|spank|whip|collar|leash|gag|exposure|smear|filthy|nsfw[_ -]?master|noise|concept|helper|fix.?hand|body.?detect/i;
+
+const SHOW_HINT =
+  /\([^)]{3,}\)|danmachi|shield.?hero|genshin|honkai|naruto|one.?piece|ff7|final.?fantasy|pokemon|re:?zero|konosuba|overlord|fate|touhou|kancolle|azur.?lane|hololive|vocaloid|my.?hero|bleach|chainsaw|jujutsu|demon.?slayer|kimetsu|evangelion|\bsao\b|\baot\b|spy.?family|lockhart|raiden|hestia|raphtalia|liliruca|aerith|tifa|alice|angelina|mara|tamaki|takeda|shinano|kamiya/;
+
+/** Person / show-character LoRA — not an act, pose, or detail slider. */
+export function isCharacterLora(filename: string): boolean {
+  const base = (filename || "").replace(/\\/g, "/").split("/").pop() || "";
+  const stem = base.replace(/\.(safetensors|ckpt|pt|sft)$/i, "");
+  if (!stem || isNotALora(base)) return false;
+  if (LORA_ACT.test(stem)) return false;
+  if (SHOW_HINT.test(stem)) return true;
+  const trigger = loraTriggerFromFilename(base);
+  if (!trigger || trigger.length < 3) return false;
+  const words = trigger.split(/\s+/).filter((w) => /^[A-Za-z][A-Za-z']{2,}$/.test(w));
+  if (words.length < 1 || words.length > 4) return false;
+  if (words.length === 1 && /^(detail|realism|style|helper|slider|noise|quality|fix|hands|body|face|light|dark)$/i.test(words[0]!)) {
+    return false;
+  }
+  return true;
+}
+
+export function characterLabel(filename: string): string {
+  const t = loraTriggerFromFilename(filename);
+  const raw = t || (filename.replace(/\\/g, "/").split("/").pop() || filename).replace(/\.safetensors$/i, "");
+  return raw
+    .split(/\s+/)
+    .map((w) => (w ? w[0]!.toUpperCase() + w.slice(1) : w))
+    .join(" ");
+}
+
 const LORA_NAME_STOP = new Set([
   "illustrious",
   "anima",

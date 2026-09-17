@@ -19,6 +19,8 @@ import {
   pairWanUnets,
   sameStill,
   isNotALora,
+  isCharacterLora,
+  characterLabel,
   ckptBase,
   type Aspect,
   type ComfySettings,
@@ -354,7 +356,9 @@ export const useForge = create<ForgeState>()(
             return {
               id: `comfy-${filename}`,
               filename,
-              name: filename.replace(/\.safetensors$/i, "").replace(/.*\//, ""),
+              name: isCharacterLora(filename)
+                ? characterLabel(filename)
+                : filename.replace(/\.safetensors$/i, "").replace(/.*\//, ""),
               family: (() => {
                 const lane = guessLoraFamily(filename);
                 return lane === "any" ? "sdxl" : lane;

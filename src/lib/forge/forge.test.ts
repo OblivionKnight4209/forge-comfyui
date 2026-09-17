@@ -16,6 +16,8 @@ import {
   isRealCheckpoint,
   isImageCheckpoint,
   isNotALora,
+  isCharacterLora,
+  characterLabel,
   resolveCkpt,
   isWanUnet,
   wanPairOk,
@@ -1163,6 +1165,18 @@ describe("loras", () => {
     ];
     assert.equal(triggerPrefix(loras, "in an alley"), "alice, in an alley");
     assert.equal(triggerPrefix(loras, "alice in an alley"), "alice in an alley");
+  });
+  it("person LoRAs are names, not sex acts", () => {
+    assert.equal(isCharacterLora("Hestia (DanMachi) Illustrious v4.safetensors"), true);
+    assert.equal(isCharacterLora("Raphtalia (The Rising Of The Shield Hero) Anima.safetensors"), true);
+    assert.equal(isCharacterLora("lilirucaArde.safetensors"), true);
+    assert.equal(isCharacterLora("Angelina.safetensors"), true);
+    assert.equal(isCharacterLora("alice_illustrious_v4.safetensors"), true);
+    assert.equal(isCharacterLora("mating-press-v6-illustriousxl-lora.safetensors"), false);
+    assert.equal(isCharacterLora("add_detail.safetensors"), false);
+    assert.equal(isCharacterLora("pussy_juice_anima_V1.0.safetensors"), false);
+    assert.equal(isCharacterLora("cunnilingus.safetensors"), false);
+    assert.match(characterLabel("Hestia (DanMachi) Illustrious v4.safetensors"), /Hestia/i);
   });
   it("turns on LoRAs when you type the character name", () => {
     const list: LoraEntry[] = [

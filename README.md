@@ -1,4 +1,4 @@
-# Forge v238
+# Forge v239
 
 Offline studio on your Linux Mint PC. **Forge is the cockpit. ComfyUI is the engine.** Nothing is sent to Grok or any cloud for generate / write / video.
 
@@ -26,14 +26,14 @@ pkill -f "vite|npm run dev" 2>/dev/null || true
 rm -rf "$HOME/forge"
 mkdir -p "$HOME/forge"
 cd "$HOME/Downloads"
-wget -O Forge-offline.zip https://github.com/OblivionKnight4209/forge-comfyui/releases/download/v238/Forge-offline.zip
+wget -O Forge-offline.zip https://github.com/OblivionKnight4209/forge-comfyui/releases/download/v239/Forge-offline.zip
 unzip -o Forge-offline.zip -d "$HOME/forge"
 cd "$HOME/forge"
 chmod +x start-forge.sh
 ./start-forge.sh
 ```
 
-The script must print **Forge v238**. Top-left corner of the page must say **238**. Hard refresh (`Ctrl+Shift+R`). If it still says 219, you unzipped an old zip.
+The script must print **Forge v239**. Top-left corner of the page must say **239**. Hard refresh (`Ctrl+Shift+R`). If it still says 219, you unzipped an old zip.
 
 Keep Comfy running in another terminal:
 
@@ -75,6 +75,7 @@ Switching Image ↔ Comic **clears the other tab’s picture**. Comic builder st
 - **Hires** — extra upscale pass on text→image (sharper, slower).
 - **Batch** — 1 → 2 → 4 stills from one prompt (cycles).
 - **Look** — art wrap (anime / real / toon) + quality chips. Neutral until you pick one.
+- **People** — person / show-character LoRAs that **fit this mix** (Hestia, Raphtalia, Alice…). Tap one: name goes in the box, LoRA turns on. Not sex-act LoRAs. Image first for XL people; WAN video ignores them.
 - **Mic** — Chrome / Edge / Safari. Firefox has no speech API.
 
 **Seed:** lock it to retry the same noise. Unlock for a new roll. Mixes locks the seed so you can compare checkpoints.
