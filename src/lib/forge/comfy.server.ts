@@ -11,11 +11,20 @@ function trimBase(url: string) {
   return url.replace(/\/+$/, "");
 }
 
-async function comfyFetch(
+function comfyBases(preferred?: string): string[] {
+  const raw = (preferred || process.env.COMFY_URL || "http://127.0.0.1:8188").replace(/\/+$/, "");
+  const out = [raw];
+  if (/127\.0\.0\.1/.test(raw)) out.push(raw.replace("127.0.0.1", "localhost"));
+  else if (/localhost/i.test(raw)) out.push(raw.replace(/localhost/i, "127.0.0.1"));
+  return [...new Set(out)];
+}
+
+async function comfyFetchOnce(
   baseUrl: string,
   path: string,
-  init: RequestInit = {},
-  timeoutMs = 4000,
+  init: RequestInit,
+  timeoutMs: number,
+  extra: Record<string, string>,
 ): Promise<Response> {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -23,8 +32,7 @@ async function comfyFetch(
     return await fetch(`${trimBase(baseUrl)}${path}`, {
       ...init,
       headers: {
-        origin: trimBase(baseUrl),
-        referer: `${trimBase(baseUrl)}/`,
+        ...extra,
         ...(init.headers ?? {}),
       },
       signal: ctrl.signal,
@@ -32,6 +40,37 @@ async function comfyFetch(
   } finally {
     clearTimeout(t);
   }
+}
+
+async function comfyFetch(
+  baseUrl: string,
+  path: string,
+  init: RequestInit = {},
+  timeoutMs = 8000,
+): Promise<Response> {
+  const bases = comfyBases(baseUrl);
+  let last: Response | undefined;
+  let lastErr: unknown;
+  for (const base of bases) {
+    const origin = trimBase(base);
+    const tries: Record<string, string>[] = [
+      {},
+      { origin, referer: `${origin}/` },
+      { Origin: origin, Referer: `${origin}/` },
+    ];
+    for (const extra of tries) {
+      try {
+        const res = await comfyFetchOnce(base, path, init, timeoutMs, extra);
+        last = res;
+        if (res.ok) return res;
+        if (res.status !== 403) return res;
+      } catch (err) {
+        lastErr = err;
+      }
+    }
+  }
+  if (last) return last;
+  throw lastErr instanceof Error ? lastErr : new Error("Comfy fetch failed");
 }
 
 function comboList(input: unknown): string[] {
@@ -489,17 +528,21 @@ function wd14OnDisk() {
 }
 
 export async function pingComfy(baseUrl: string): Promise<boolean> {
-  try {
-    let stats = await comfyFetch(baseUrl, "/system_stats", {}, 2500);
-    if (!stats.ok) stats = await comfyFetch(baseUrl, "/api/system_stats", {}, 2500);
-    return stats.ok;
-  } catch {
-    return false;
+  const paths = ["/queue", "/api/queue", "/system_stats", "/api/system_stats", "/prompt", "/api/prompt"];
+  for (const p of paths) {
+    try {
+      const res = await comfyFetch(baseUrl, p, {}, 8000);
+      if (res.ok || res.status === 405 || res.status === 400) return true;
+    } catch {
+      /* next path / base */
+    }
   }
+  return false;
 }
 
 let diskCache: { at: number; data: ReturnType<typeof scanDiskModels> } | null = null;
 let infoCache: { at: number; info: Record<string, Record<string, unknown>> } | null = null;
+let lastGood: ComfyStatus | null = null;
 
 function scanDiskModelsCached() {
   if (diskCache && Date.now() - diskCache.at < 60_000) return diskCache.data;
@@ -542,9 +585,12 @@ export async function probeComfy(baseUrl: string): Promise<ComfyStatus> {
   try {
     const alive = await pingComfy(baseUrl);
     if (!alive) {
+      if (lastGood?.ok && Date.now() - (infoCache?.at ?? 0) < 180_000) {
+        return { ...lastGood, message: lastGood.message || "Comfy busy — using last model list" };
+      }
       return {
         ok: false,
-        message: `ComfyUI not answering. Disk still has ${diskCkpts.length} checkpoints.`,
+        message: `ComfyUI not answering at ${trimBase(baseUrl)}. Start it: cd ~/comfy/ComfyUI && source .venv/bin/activate && python main.py --listen 0.0.0.0 --port 8188 --enable-cors-header. Disk still has ${diskCkpts.length} checkpoints.`,
         ...empty,
       };
     }
@@ -606,7 +652,7 @@ export async function probeComfy(baseUrl: string): Promise<ComfyStatus> {
     ];
     const hasClipSeg = Boolean(info.CLIPSeg || info.BatchCLIPSeg);
     const hasCanny = Boolean(info.Canny || info.CannyEdgePreprocessor);
-    return {
+    const status: ComfyStatus = {
       ok: true,
       message: `ComfyUI · ${checkpoints.length} checkpoints`,
       checkpoints,
@@ -621,6 +667,8 @@ export async function probeComfy(baseUrl: string): Promise<ComfyStatus> {
       hasClipSeg,
       hasCanny,
     };
+    lastGood = status;
+    return status;
   } catch (err) {
     const msg = err instanceof Error ? err.message : "unreachable";
     return {

@@ -481,8 +481,9 @@ export function Studio() {
     tick();
     const id = setInterval(() => {
       const busy = useForge.getState().jobs.some((j) => j.status === "running");
-      if (!busy) void tick();
-    }, 45000);
+      if (busy && lastComfyOk.current) return;
+      void tick();
+    }, 8000);
     lanInfoFn()
       .then((info) => {
         useForge.getState().setLanUrls(info.addresses.map((a) => `http://${a}:${info.port}`));
@@ -2760,7 +2761,7 @@ export function Studio() {
     <div className="flex min-h-dvh flex-col overflow-x-hidden bg-bg pb-8 text-fg">
       <header className="flex flex-wrap items-center gap-2 px-3 py-3 md:gap-3 md:px-6">
         <p className="text-[15px] font-medium tracking-tight">Forge</p>
-        <span className="text-[11px] tabular-nums text-subtle">252</span>
+        <span className="text-[11px] tabular-nums text-subtle">253</span>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {meta.video ? (
             <select
