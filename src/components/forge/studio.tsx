@@ -101,6 +101,7 @@ import { composeI2iPrompt, expandEditFields, inpaintMaskText } from "@/lib/forge
 import { isVideoName, mediaMime, withVideoDataUrl } from "@/lib/forge/media-mime";
 import { writeExtreme, writeDarkSet, writeTabooSet, writeHorrorSet, isWashed, NSFW_TYPES, nsfwGroup, writeMenus, WHO_BITS, WHERE_BITS, MORE_BITS, COMIC_BITS, EVIL_BITS, FACE_BITS, BODY_BITS, CLOTHES_BITS, PLACE_BITS, CAM_BITS, LIGHT_BITS } from "@/lib/forge/extreme";
 import { characterBio, enabledCastBios } from "@/lib/forge/cast";
+import { COMIC_LAYOUTS, COMIC_INK, buildComicPrompt, formatComicScript } from "@/lib/forge/comic";
 import {
   apiToUiWorkflow,
   buildApiWorkflow,
@@ -1129,10 +1130,8 @@ export function Studio() {
 
   async function voteStill(side: "up" | "down", reason?: TasteReason, jobArg?: Job) {
     const src = zoom?.src || stageSrc || jobArg?.resultDataUrl || active?.resultDataUrl;
-    const job =
-      jobArg ||
-      active ||
-      useForge.getState().jobs.find((j) => j.resultDataUrl && (j.resultDataUrl === src || j.id === active?.id));
+    const listed = useForge.getState().jobs.find((j) => j.resultDataUrl === src);
+    const job: Job | undefined = jobArg || active || listed;
     if (!job && !src) {
       logForge("warn", "Taste", "Generate a still first, then thumbs.");
       toast.error("Generate a still first, then thumbs.");
@@ -2762,7 +2761,7 @@ export function Studio() {
     <div className="flex min-h-dvh flex-col overflow-x-hidden bg-bg pb-8 text-fg">
       <header className="flex flex-wrap items-center gap-2 px-3 py-3 md:gap-3 md:px-6">
         <p className="text-[15px] font-medium tracking-tight">Forge</p>
-        <span className="text-[11px] tabular-nums text-subtle">250</span>
+        <span className="text-[11px] tabular-nums text-subtle">251</span>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {meta.video ? (
             <select

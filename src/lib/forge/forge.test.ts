@@ -72,6 +72,7 @@ import { embedWorkflowPng, readPngText, seedFromPngText, seedFromBytes } from ".
 import { scanFromTags, boxesFromTags, mergeScan, combineFromScans } from "./detector.ts";
 import { buildEditPrompt, composeI2iPrompt, expandEditFields, inpaintMaskText } from "./edit-prompt.ts";
 import { characterBio } from "./cast.ts";
+import { formatComicScript, COMIC_LAYOUTS, buildComicPrompt } from "./comic.ts";
 import type { ComfySettings, LoraEntry, Mode } from "./types.ts";
 
 function settings(over: Partial<ComfySettings> = {}): ComfySettings {
@@ -2290,5 +2291,109 @@ describe("taste votes", () => {
     assert.equal(names[0], "mid.safetensors");
     assert.equal(names[1], "good.safetensors");
     assert.match(warnForCheckpoint(book, "bad.safetensors"), /thumbs down/i);
+  });
+});
+
+describe("v250 full regression", () => {
+  it("XL never picks a 1.5 VAE", () => {
+    const vaes = ["vae-ft-mse-840000-ema-pruned.safetensors", "anythingModelVAEV40_v10.pt", "ae.safetensors", "wan_2.1_vae.safetensors", "sdxl_vae.safetensors"];
+    assert.equal(pickVaeName("sdxl", { fluxVae: "", wanVae: "" }, vaes), "sdxl_vae.safetensors");
+    assert.equal(pickVaeName("flux", { fluxVae: "", wanVae: "" }, vaes), "ae.safetensors");
+    assert.match(pickVaeName("sd15", { fluxVae: "", wanVae: "" }, vaes), /vae-ft-mse/);
+  });
+  it("XL with no sdxl_vae returns empty so the mix baked VAE is used", () => {
+    const vaes = ["vae-ft-mse-840000-ema-pruned.safetensors", "wan_2.1_vae.safetensors", "ae.safetensors"];
+    assert.equal(pickVaeName("sdxl", { fluxVae: "", wanVae: "" }, vaes), "");
+  });
+  it("combine 2 photos is canvas not stitch; 3+ stitches", () => {
+    const two = graph({ mode: "ref2i", imageCount: 2, denoise: 0.58 });
+    assert.ok(!classes(two).includes("ImageStitch"));
+    assert.ok(classes(two).includes("LoadImage"));
+    const three = graph({ mode: "ref2i", imageCount: 3, denoise: 0.72 });
+    assert.ok(classes(three).includes("ImageStitch"));
+  });
+  it("combine denoise clamps 2-photo mid and 3+ high", () => {
+    assert.ok(combineDenoise(0.3, 2) >= 0.48);
+    assert.ok(combineDenoise(0.9, 2) <= 0.65);
+    assert.ok(combineDenoise(0.4, 4) >= 0.7);
+  });
+  it("people group by show and skip sex-act files", () => {
+    assert.equal(characterShow("DanMachi_Ishtar_IlluXL.safetensors"), "DanMachi");
+    assert.equal(characterShow("Raphtalia-shield-hero-illustrious.safetensors"), "Shield Hero");
+    assert.equal(characterShow("HighSchoolDxDHERO_RiasGremory_IlluXL.safetensors"), "High School DxD");
+    assert.equal(isCharacterLora("mating-press-v6-illustriousxl-lora.safetensors"), false);
+    assert.equal(isCharacterLora("Hestia (DanMachi) Illustrious v4.safetensors"), true);
+    assert.match(characterBio("Hestia (DanMachi) Illustrious v4.safetensors"), /black hair|blue ribbon/i);
+  });
+  it("random expand is not a copy of the typed line or the previous seed", () => {
+    const a = grokExpand({ typed: "girl kick a dog", files: DEFAULT_WILDCARDS, seed: 3, family: "sdxl", checkpoint: "Dasiwa.safetensors", roll: "random" });
+    const b = grokExpand({ typed: "girl kick a dog", files: DEFAULT_WILDCARDS, seed: 88, family: "sdxl", checkpoint: "Dasiwa.safetensors", roll: "random" });
+    assert.notEqual(a.toLowerCase(), "girl kick a dog");
+    assert.notEqual(a, b);
+    assert.match(a, /girl|dog/i);
+  });
+  it("normal expand fills a short subject with looks and place", () => {
+    const t = grokExpand({ typed: "hestia in a tavern", files: DEFAULT_WILDCARDS, seed: 7, family: "sdxl", checkpoint: "DasiwaIllustrious.safetensors", nsfwMode: false });
+    assert.ok(t.split(/\s+/).length > 12);
+    assert.match(t, /hestia/i);
+    assert.doesNotMatch(t, /\b(pussy|cock|ahegao)\b/i);
+  });
+  it("NSFW expand stays explicit", () => {
+    const t = grokExpand({ typed: "hestia sex in a tavern", files: DEFAULT_WILDCARDS, seed: 7, family: "sdxl", checkpoint: "DasiwaIllustrious.safetensors", nsfwMode: true });
+    assert.match(t, /uncensored|explicit|sex|pussy|cock|nude/i);
+  });
+  it("comic 2x2 has four panel beats", () => {
+    assert.ok(COMIC_LAYOUTS.length >= 3);
+    const script = formatComicScript("goblin vs warrior", "2x2", { seed: 1 });
+    assert.match(script, /P1:/);
+    assert.match(script, /P4:/);
+    const page = buildComicPrompt("goblin vs warrior", "2x2", "manga ink", { seed: 1 });
+    assert.match(page, /panel 1/i);
+    assert.match(page, /comic/i);
+  });
+  it("t2i / i2i / i2v / t2v graphs are valid", () => {
+    const t2i = graph({ mode: "t2i" });
+    assert.equal(validateApiGraph(t2i).length, 0);
+    assert.ok(classes(t2i).includes("CheckpointLoaderSimple") || classes(t2i).includes("CheckpointLoader"));
+    const i2i = graph({ mode: "i2i", denoise: 0.55, imageCount: 1 });
+    assert.ok(classes(i2i).includes("LoadImage"));
+    assert.ok(classes(i2i).includes("VAEEncode") || classes(i2i).includes("VAEEncodeForInpaint"));
+    const i2v = graph({
+      mode: "i2v",
+      imageCount: 1,
+      hasVideo: false,
+      settings: settings({ wanUnet: "wan2.1_i2v_480p_14B_fp8_e4m3fn.safetensors", wanVae: "wan_2.1_vae.safetensors", wanClip: "umt5_xxl_fp8.safetensors" }),
+    });
+    assert.ok(classes(i2v).includes("LoadImage") || classes(i2v).some((c) => /Wan|ImageToVideo/i.test(c)));
+    const t2v = graph({
+      mode: "t2v",
+      settings: settings({ wanUnet: "wan2.2_ti2v_5B_fp16.safetensors", wanVae: "wan2.2_vae.safetensors", wanClip: "umt5_xxl_fp8.safetensors" }),
+    });
+    assert.ok(classes(t2v).includes("SaveVideo") || classes(t2v).some((c) => /Video|Wan/i.test(c)));
+  });
+  it("1.5 mix strips XL people LoRAs", () => {
+    const loras: LoraEntry[] = [
+      { id: "1", filename: "Hestia_IlluXL.safetensors", name: "hestia", family: "sdxl", triggerWords: ["hestia"], unetStrength: 0.8, clipStrength: 0.8, enabled: true },
+      { id: "2", filename: "add_detail.safetensors", name: "detail", family: "sd15", triggerWords: [], unetStrength: 0.8, clipStrength: 0.8, enabled: true },
+    ];
+    const g = graph({
+      mode: "t2i",
+      loras,
+      settings: settings({ checkpoint: "uberRealisticPornMerge_v23Final.safetensors", stillFamily: "sd15" }),
+    });
+    const dumped = JSON.stringify(g);
+    assert.doesNotMatch(dumped, /Hestia_IlluXL/);
+  });
+  it("combineFromScans same-person vs two people", () => {
+    const girl = { summary: "1girl", tags: [{ tag: "1girl", confidence: 0.9 }, { tag: "solo", confidence: 0.8 }], boxes: [], palette: [], notes: [], scannedAt: 1 };
+    const two = combineFromScans("together in a tavern", [girl, girl]);
+    assert.equal(two.samePerson, true);
+    const guy = { summary: "1boy", tags: [{ tag: "1boy", confidence: 0.9 }], boxes: [], palette: [], notes: [], scannedAt: 1 };
+    const mix = combineFromScans("together in a tavern", [girl, guy]);
+    assert.equal(mix.samePerson, false);
+  });
+  it("WAN 2.1 VAE does not pair with 2.2 5B", () => {
+    assert.equal(wanPairOk("wan2.2_ti2v_5B_fp16.safetensors", "wan_2.1_vae.safetensors"), false);
+    assert.equal(wanPairOk("wan2.1_i2v_480p_14B_fp8_e4m3fn.safetensors", "wan_2.1_vae.safetensors"), true);
   });
 });
