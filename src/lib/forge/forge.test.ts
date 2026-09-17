@@ -70,6 +70,7 @@ import { designClipAudio, ensureVoice } from "./clip-sound.ts";
 import { embedWorkflowPng, readPngText, seedFromPngText, seedFromBytes } from "./png.ts";
 import { scanFromTags, boxesFromTags, mergeScan } from "./detector.ts";
 import { buildEditPrompt, composeI2iPrompt, expandEditFields, inpaintMaskText } from "./edit-prompt.ts";
+import { characterBio } from "./cast.ts";
 import type { ComfySettings, LoraEntry, Mode } from "./types.ts";
 
 function settings(over: Partial<ComfySettings> = {}): ComfySettings {
@@ -716,6 +717,12 @@ describe("writer", () => {
     assert.match(sys, /Do not add sex/);
     assert.match(sys, /Uncensored/);
     assert.match(sys, /anime/);
+    const withCast = brainSystem({
+      nsfwMode: false,
+      cast: characterBio("Hestia (DanMachi) Illustrious v4.safetensors"),
+    });
+    assert.match(withCast, /CAST/);
+    assert.match(withCast, /Hestia|black hair/i);
   });
   it("look flavor keeps the scene and does not dump sex", () => {
     const t = writePrompt({
@@ -1190,6 +1197,21 @@ describe("loras", () => {
     assert.equal(isCharacterLora("Noelle_Silva_r1.safetensors"), true);
     assert.equal(isCharacterLora("ARankPartyStyle_IXL.safetensors"), true);
     assert.equal(isCharacterLora("HighschoolDxD_AsiaArgentoXL.safetensors"), true);
+    assert.match(characterBio("Hestia (DanMachi) Illustrious v4.safetensors"), /black hair|blue ribbon/i);
+    assert.match(characterBio("DanMachi_LilirucaArde_IlluXL.safetensors"), /pallum|brown hair|red eyes/i);
+    assert.match(characterBio("HighSchoolDxDHERO_RiasGremory_IlluXL.safetensors"), /crimson|red hair/i);
+    assert.match(characterBio("Raphtalia-shield-hero-illustrious.safetensors"), /raccoon|tanuki|brown hair/i);
+    const filled = grokExpand({
+      typed: "sitting in a tavern",
+      files: DEFAULT_WILDCARDS,
+      seed: 4,
+      family: "sdxl",
+      checkpoint: "DasiwaIllustrious.safetensors",
+      nsfwMode: false,
+      cast: [characterBio("DanMachi_LilirucaArde_IlluXL.safetensors")],
+    });
+    assert.match(filled, /liliruca|pallum|brown hair/i);
+    assert.match(filled, /tavern/i);
     assert.equal(isCharacterLora("groolpanties.safetensors"), false);
     assert.equal(characterShow("DanMachi_LilirucaArde_IlluXL.safetensors"), "DanMachi");
     assert.match(characterLabel("HighSchoolDxDHERO_RiasGremory_IlluXL.safetensors"), /Rias/i);

@@ -923,11 +923,14 @@ function sceneProse(text: string, anime: boolean, rng: () => number, nsfwMode = 
   const dirty = (isAdult(lead) || nsfwWanted(lead, nsfwMode)) && !fightOrBeast;
   const who: string[] = [];
   if (c.girl) {
+    const already = /\b(hair|eyes|ears|tail|dress|armor|ribbon|twintail)\b/i.test(lead);
+    if (!already) {
     who.push(
       `the girl is ${pickFrom(WOMAN_LOOK.body, rng)}, ${pickFrom(WOMAN_LOOK.face, rng)}, ${pickFrom(WOMAN_LOOK.hair, rng)}, wearing ${
         dirty ? pickFrom(SKIMPY_LOOK, rng) : pickFrom(WOMAN_LOOK.clothes, rng)
       }`,
     );
+    }
   }
   if (c.man && !c.goblin && !c.orc && !c.monster) {
     who.push(
@@ -1556,10 +1559,23 @@ export function grokExpand(opts: {
   checkpoint?: string;
   roll?: "normal" | "random";
   nsfwMode?: boolean;
+  cast?: string[];
 }): string {
   const raw = (opts.typed ?? "").replace(/\s+/g, " ").trim();
-  if (!raw) return raw;
-  const { expanded: wild } = expandPrompt(raw, opts.files, opts.seed);
+  if (!raw && !(opts.cast && opts.cast.length)) return raw;
+  const seeded = (() => {
+    const p = raw || (opts.cast || []).join(". ");
+    const bios = opts.cast || [];
+    if (!bios.length) return p;
+    const missing = bios.filter((b) => {
+      const first = (b.split(",")[0] || "").split(/\s+/)[0] || "";
+      return first.length > 2 && !new RegExp(`\\b${first.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(p);
+    });
+    const looks = /\b(hair|eyes|ears|tail|dress|armor|ribbon)\b/i.test(p) ? [] : bios;
+    const extra = [...new Set([...missing, ...looks])];
+    return extra.length ? `${extra.join(". ")}. ${p}`.replace(/\.\s*\./g, ".").trim() : p;
+  })();
+  const { expanded: wild } = expandPrompt(seeded, opts.files, opts.seed);
   const dumped =
     isPurpleProse(wild) ||
     (/pores|subsurface scatter|highly detailed anime still/i.test(wild) &&

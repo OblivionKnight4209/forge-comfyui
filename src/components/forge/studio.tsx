@@ -100,7 +100,7 @@ import { PROMPT_FLAVORS, expandPrompt, grokExpand, grokMotion, writeIdeas, write
 import { composeI2iPrompt, expandEditFields, inpaintMaskText } from "@/lib/forge/edit-prompt";
 import { isVideoName, mediaMime, withVideoDataUrl } from "@/lib/forge/media-mime";
 import { writeExtreme, writeDarkSet, writeTabooSet, writeHorrorSet, isWashed, NSFW_TYPES, nsfwGroup, writeMenus, WHO_BITS, WHERE_BITS, MORE_BITS, COMIC_BITS, EVIL_BITS, FACE_BITS, BODY_BITS, CLOTHES_BITS, PLACE_BITS, CAM_BITS, LIGHT_BITS } from "@/lib/forge/extreme";
-import { COMIC_LAYOUTS, COMIC_INK, buildComicPrompt, formatComicScript, isPanelScript } from "@/lib/forge/comic";
+import { characterBio, enabledCastBios } from "@/lib/forge/cast";
 import {
   apiToUiWorkflow,
   buildApiWorkflow,
@@ -1455,6 +1455,7 @@ export function Studio() {
         checkpoint: state.settings.checkpoint,
         roll: state.promptRoll,
         nsfwMode: state.nsfwMode,
+        cast: enabledCastBios(state.loras),
       }),
     );
     const first = locals.find((t) => t && t !== core && t.length > core.length + 8) || locals[0] || core;
@@ -1492,6 +1493,7 @@ export function Studio() {
         fresh: keepBox,
         seed,
         nsfwMode: state.nsfwMode,
+        cast: enabledCastBios(state.loras).join("\n"),
       });
       if (!r.ok) {
         logForge("warn", "Creator", r.message);
@@ -1532,10 +1534,11 @@ export function Studio() {
     const words = (l.triggerWords.length ? l.triggerWords : [loraTriggerFromFilename(l.filename)]).filter(Boolean);
     useForge.getState().upsertLora({ ...l, enabled: on, triggerWords: words });
     const trigger = words[0] || characterLabel(l.filename);
+    const bio = characterBio(l.filename);
     if (!trigger) return;
     const box = useForge.getState().prompt;
     const hit = new RegExp(`\\b${trigger.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(box);
-    if (on && !hit) useForge.getState().setPrompt(box.trim() ? `${trigger}, ${box}` : trigger);
+    if (on && !hit) useForge.getState().setPrompt(box.trim() ? `${bio}, ${box}` : bio);
   }
 
   async function writeIntoBox(flavor: PromptFlavor) {
@@ -1587,6 +1590,7 @@ export function Studio() {
       checkpoint: state.settings.checkpoint,
       roll: state.promptRoll,
       nsfwMode: state.nsfwMode,
+      cast: enabledCastBios(state.loras),
     });
     const local =
       flavor === "horror"
@@ -1614,6 +1618,7 @@ export function Studio() {
         checkpoint: state.settings.checkpoint,
         roll: "normal",
         nsfwMode: state.nsfwMode,
+        cast: enabledCastBios(state.loras),
       });
     }
     skipIdeaRefresh.current = true;
@@ -2641,7 +2646,7 @@ export function Studio() {
     <div className="flex min-h-dvh flex-col overflow-x-hidden bg-bg pb-8 text-fg">
       <header className="flex flex-wrap items-center gap-2 px-3 py-3 md:gap-3 md:px-6">
         <p className="text-[15px] font-medium tracking-tight">Forge</p>
-        <span className="text-[11px] tabular-nums text-subtle">242</span>
+        <span className="text-[11px] tabular-nums text-subtle">243</span>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {meta.video ? (
             <select

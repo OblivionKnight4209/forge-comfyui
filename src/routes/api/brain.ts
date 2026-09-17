@@ -19,6 +19,7 @@ export const Route = createFileRoute("/api/brain")({
           fresh?: boolean;
           seed?: number;
           nsfwMode?: boolean;
+          cast?: string;
         };
         const { runBrain } = await import("@/lib/forge/ollama.server");
         const result = await runBrain({
@@ -29,6 +30,7 @@ export const Route = createFileRoute("/api/brain")({
           fresh: body.fresh,
           seed: body.seed,
           nsfwMode: body.nsfwMode,
+          cast: body.cast,
         });
         return Response.json(result);
       },

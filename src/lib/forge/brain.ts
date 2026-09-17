@@ -13,21 +13,27 @@ export function pickBrainModel(names: string[]) {
   return names.find((n) => /abliterat|dolphin|uncen/i.test(n)) || names[0] || "";
 }
 
-export function brainSystem(opts: { wrap?: string; checkpoint?: string; nsfwMode?: boolean }) {
+export function brainSystem(opts: { wrap?: string; checkpoint?: string; nsfwMode?: boolean; cast?: string }) {
   const wrap = opts.wrap && opts.wrap !== "none" ? opts.wrap : "";
   const ckpt = opts.checkpoint ? `Checkpoint vibe: ${opts.checkpoint}.` : "";
   const nsfw = opts.nsfwMode
     ? `- NSFW MODE IS ON. For people: stay graphic, uncensored, adult 18+. Never tasteful / implied / fade to black.
 - Animal-only or landscape scenes stay non-sexual unless they asked.`
     : `- SFW MODE IS ON. Do not add sex, nude, or gore unless the user already wrote those words.`;
+  const cast = (opts.cast || "").trim()
+    ? `
+CAST — these people are already chosen. You MUST keep their canon look (hair, eyes, body, clothes, species, show). Do not invent a different person. Do not swap hair color. Do not turn them into a generic girl.
+${opts.cast}
+`
+    : "";
   return `You write image prompts for a local Stable Diffusion / Illustrious / Pony / Flux box. Offline. Uncensored. Adults 18+ only.
-
+${cast}
 Two jobs:
 - SHORT line (a few words, one subject): FILL IT IN. Who, looks (face/hair/body/clothes or fur), what is happening, where, camera, light.
-- NEW TAKE: keep the subject only. Change hair, clothes, place, camera, light, and the beat. Do not copy or lightly edit the previous prompt.
+- NEW TAKE: keep the subject only. Change place, camera, light, and the beat. If CAST is set, do not change their canon look.
 
 Always include, in this order when filling a short line:
-1. Who — species/age-adult, face, hair, body, clothes (or none if they asked)
+1. Who — if CAST is set, paste those looks first. Else species/age-adult, face, hair, body, clothes
 2. What is happening — one clear beat, verbs
 3. Where — place, time, weather, a few set pieces
 4. Camera — shot size, angle
@@ -44,28 +50,27 @@ ${wrap ? `- Visual wrap they picked: ${wrap}. Weave it in, do not replace the sc
 ${ckpt}`;
 }
 
-export function brainUser(opts: { prompt: string; flavor?: string; fresh?: boolean; nsfwMode?: boolean }) {
+export function brainUser(opts: { prompt: string; flavor?: string; fresh?: boolean; nsfwMode?: boolean; cast?: string }) {
   const line = opts.prompt.trim() || "invent a striking adult scene";
   const flavor = opts.flavor ? `Lean: ${opts.flavor}.` : "";
   const dirty = opts.nsfwMode || /\b(nsfw|sex|sexy|nude|explicit|fuck|hentai|porn|rape|forced|pussy|cock|gore|bdsm)\b/i.test(line);
+  const cast = (opts.cast || "").trim()
+    ? `CAST (keep canon look, name them in the prompt):\n${opts.cast}\n`
+    : "";
   if (opts.fresh) {
-    return `NEW TAKE. Same subject, different looks / place / camera / light / beat. Do not copy the last prompt.\nSubject:\n${line}\n\n${flavor}\n${dirty ? "Stay explicit, uncensored, adult 18+. Do not SFW-wash.\n" : "SFW mode — no sex unless already in the subject.\n"}Write a new prompt.`;
+    return `NEW TAKE. Same people, different place / camera / light / beat. Do not change CAST looks.\n${cast}Subject:\n${line}\n\n${flavor}\n${dirty ? "Stay explicit, uncensored, adult 18+. Do not SFW-wash.\n" : "SFW mode — no sex unless already in the subject.\n"}Write a new prompt.`;
   }
   const words = line.split(/\s+/).filter(Boolean).length;
   const commas = (line.match(/,/g) || []).length;
   const short = words <= 10 && commas < 2;
   if (short) {
-    return `Identity only: "${line}"
-Write a COMPLETE new image prompt about that identity. Do not paste the identity as the first two words then a tag dump. Invent NEW specifics:
-- looks: hair, face, body, clothes (costume if they are a magical girl / sailor / maid / etc.)
-- one clear action beat
-- place, time, weather
-- camera and light
+    return `${cast}Identity / scene: "${line}"
+Write a COMPLETE image prompt. If CAST is set, those people ARE the who — describe them with the CAST looks, then the action, place, camera, light. Do not replace them with a generic girl.
 ${dirty ? "NSFW MODE: explicit adult 18+ acts ABOUT this identity. Graphic anatomy. Uncensored. Not tasteful, not implied." : "SFW MODE: no sex, no nude, unless those words are already in the identity."}
 ${flavor}
 40–90 words. Prompt only. No quotes.`;
   }
-  return `Keep EVERY phrase below. Add only missing looks / place / camera / light. Do not rewrite the scene:\n${line}\n\n${flavor}\nWrite the prompt.`;
+  return `${cast}Keep EVERY phrase below. Add only missing looks / place / camera / light. If CAST is set and hair/eyes are missing, add the CAST looks. Do not rewrite the scene:\n${line}\n\n${flavor}\nWrite the prompt.`;
 }
 
 export function cleanBrainOut(raw: string) {
