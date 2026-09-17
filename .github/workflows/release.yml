@@ -7,6 +7,7 @@ on:
       - VERSION
       - start-forge.sh
       - src/components/forge/studio.tsx
+      - src/lib/forge/store.ts
       - .github/workflows/release.yml
 permissions:
   contents: write
@@ -15,11 +16,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Unit tests before zip
+        run: npx --yes tsx --test src/lib/forge/seed.test.ts
       - name: Pack
         run: |
-          VER=$(tr -d '[:space:]' < VERSION || echo 234)
+          VER=$(tr -d '[:space:]' < VERSION || echo 261)
           echo "version=$VER" >> "$GITHUB_ENV"
-          # paint the number the webpage shows
           sed -i "s/tabular-nums text-subtle\">[0-9][0-9]*/tabular-nums text-subtle\">${VER}/" src/components/forge/studio.tsx || true
           sed -i "s/Forge v[0-9][0-9]*/Forge v${VER}/" start-forge.sh || true
           rm -f Forge-offline.zip "Forge-v${VER}.zip"

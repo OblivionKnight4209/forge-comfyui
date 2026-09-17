@@ -10,11 +10,11 @@ if [ ! -d node_modules ]; then
   npm install
 fi
 echo
-echo "Forge v260 — local only"
+echo "Forge v261 — local only"
 echo "Keep ComfyUI running:"
 echo "  cd ~/comfy/ComfyUI && source .venv/bin/activate && python main.py --listen 0.0.0.0 --port 8188 --enable-cors-header"
 echo "This PC: http://127.0.0.1:8080"
 echo "Laptop / phone: http://$(hostname -I | awk '{print $1}'):8080"
-echo "If the top-left does not say 260, you unzipped the old zip."
+echo "If the top-left does not say 261, you unzipped the old zip."
 echo
 npm run dev
