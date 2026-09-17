@@ -1,4 +1,4 @@
-FORGE v255 — offline on your T1000 (Linux Mint)
+FORGE v257 — offline on your T1000 (Linux Mint)
 ===============================================
 
 Read README.md for the full how-to (tabs, Write vs Generate, Combine, Video).
@@ -8,7 +8,7 @@ This is the studio. It talks only to ComfyUI on this PC. No cloud.
 1. Keep ComfyUI running:
      cd ~/comfy/ComfyUI
      source .venv/bin/activate
-     python main.py --listen 0.0.0.0 --port 8188 --enable-cors-header
+     python main.py --listen 0.0.0.0 --port 8188
 
 2. Update (from GitHub — do this for every new version):
 
@@ -17,7 +17,7 @@ pkill -f "vite|npm run dev" 2>/dev/null || true
 rm -rf "$HOME/forge"
 mkdir -p "$HOME/forge"
 cd "$HOME/Downloads"
-wget -O Forge-offline.zip https://github.com/OblivionKnight4209/forge-comfyui/releases/download/v255/Forge-offline.zip
+wget -O Forge-offline.zip https://github.com/OblivionKnight4209/forge-comfyui/releases/download/v257/Forge-offline.zip
 unzip -o Forge-offline.zip -d "$HOME/forge"
 cd "$HOME/forge"
 chmod +x start-forge.sh
@@ -26,5 +26,5 @@ chmod +x start-forge.sh
 3. This PC: http://127.0.0.1:8080
    Phone / laptop, same Wi-Fi: http://192.168.1.7:8080
 
-Corner must say 255. If it says 219 you unzipped an old zip.
+Corner must say 257. If it says 219 you unzipped an old zip.
 Generate queues on your GPU. Unfiltered. No Grok API.
