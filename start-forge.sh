@@ -15,15 +15,14 @@ if [ ! -d node_modules ]; then
 fi
 
 echo
-echo "Forge v233 — local only"
+echo "Forge v234 — local only"
 echo "Keep ComfyUI running:"
 echo "  cd ~/comfy/ComfyUI && source .venv/bin/activate && python main.py --listen 0.0.0.0 --port 8188"
 echo
 echo "This PC (controls):  http://127.0.0.1:8080"
 echo "This PC (display):   http://127.0.0.1:8080/stage"
 echo "Laptop / phone:      http://$(hostname -I | awk '{print $1}'):8080"
-echo "If the top-left does not say 233, you still have the old v219 zip. Clone main:"
-echo "  git clone --depth 1 https://github.com/OblivionKnight4209/forge-comfyui.git ~/forge"
+echo "If the top-left does not say 234, you unzipped the old zip."
 echo "Sound on clips needs:  sudo apt install -y ffmpeg espeak-ng"
 echo "Laptop: same Wi-Fi, http://$(hostname -I | awk '{print $1}'):8080  (not 127.0.0.1)"
 echo
