@@ -52,3 +52,49 @@ export function designClipAudio(prompt: string): { lines: VoiceLine[]; sfx: SfxK
   }
   return { lines, sfx, extra };
 }
+
+/** Quiet scenes still get one spoken line so the clip is not just "mm" / wind. */
+export function ensureVoice(
+  audio: { lines: VoiceLine[]; sfx: SfxKind; extra: SfxKind[] },
+  prompt: string,
+): { lines: VoiceLine[]; sfx: SfxKind; extra: SfxKind[] } {
+  if (audio.lines.length) return audio;
+  const p = (prompt || "").toLowerCase();
+  const text = /\blamp\b/.test(p)
+    ? "the lamp"
+    : /\bquiet\b/.test(p)
+      ? "it's quiet"
+      : /\broom\b/.test(p)
+        ? "this room"
+        : "right here";
+  return { ...audio, lines: [{ voice: "female", text }] };
+}
+
+export function espeakVoice(voice: VoiceLine["voice"]): { v: string; s: string; p: string } {
+  if (voice === "female") return { v: "en-us+f3", s: "155", p: "48" };
+  return { v: "en-us+m3", s: "140", p: "28" };
+}
+
+/** Offline ffmpeg filter that builds a [bed] bus from scene tags. */
+export function ffmpegBed(kinds: SfxKind[]): string {
+  const set = new Set(kinds.filter(Boolean));
+  const parts: string[] = ["anullsrc=r=44100:cl=stereo,atrim=0:8,volume=0.001[base]"];
+  const labels = ["[base]"];
+  let i = 0;
+  const add = (expr: string) => {
+    const lab = `s${i++}`;
+    parts.push(`${expr}[${lab}]`);
+    labels.push(`[${lab}]`);
+  };
+  if (set.has("rain") || set.has("water")) add("anoisesrc=r=44100:c=pink:a=0.18,atrim=0:8,highpass=f=400,volume=0.35");
+  if (set.has("wind")) add("anoisesrc=r=44100:c=brown:a=0.2,atrim=0:8,lowpass=f=500,volume=0.28");
+  if (set.has("fight")) add("anoisesrc=r=44100:c=white:a=0.12,atrim=0:8,volume=0.12");
+  if (set.has("sex")) add("sine=f=90:d=8,volume=0.08");
+  if (set.has("horror")) add("sine=f=55:d=8,volume=0.1");
+  if (set.has("city") || set.has("crowd")) add("anoisesrc=r=44100:c=white:a=0.08,atrim=0:8,lowpass=f=800,volume=0.16");
+  if (set.has("fire")) add("anoisesrc=r=44100:c=brown:a=0.1,atrim=0:8,highpass=f=200,volume=0.16");
+  if (set.has("room") && labels.length === 1) add("anoisesrc=r=44100:c=brown:a=0.05,atrim=0:8,lowpass=f=250,volume=0.08");
+  const n = labels.length;
+  if (n === 1) return `${parts[0]};[base]anull[bed]`;
+  return `${parts.join(";")};${labels.join("")}amix=inputs=${n}:duration=first:normalize=0[bed]`;
+}

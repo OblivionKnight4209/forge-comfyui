@@ -1,4 +1,4 @@
-FORGE v262 — offline on your T1000 (Linux Mint)
+FORGE v263 — offline on your T1000 (Linux Mint)
 ===============================================
 
 Read README.md for the full how-to (tabs, Write vs Generate, Combine, Video).
@@ -17,7 +17,7 @@ pkill -f "vite|npm run dev" 2>/dev/null || true
 rm -rf "$HOME/forge"
 mkdir -p "$HOME/forge"
 cd "$HOME/Downloads"
-wget -O Forge-offline.zip https://github.com/OblivionKnight4209/forge-comfyui/releases/download/v262/Forge-offline.zip
+wget -O Forge-offline.zip https://github.com/OblivionKnight4209/forge-comfyui/releases/download/v263/Forge-offline.zip
 unzip -o Forge-offline.zip -d "$HOME/forge"
 cd "$HOME/forge"
 chmod +x start-forge.sh
@@ -26,5 +26,5 @@ chmod +x start-forge.sh
 3. This PC: http://127.0.0.1:8080
    Phone / laptop, same Wi-Fi: http://192.168.1.7:8080
 
-Corner must say 262. If it says 219 you unzipped an old zip.
+Corner must say 263. If it says 219 you unzipped an old zip.
 Generate queues on your GPU. Unfiltered. No Grok API.
