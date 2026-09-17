@@ -18,6 +18,7 @@ import {
   isNotALora,
   isCharacterLora,
   characterLabel,
+  characterShow,
   resolveCkpt,
   isWanUnet,
   wanPairOk,
@@ -1176,7 +1177,15 @@ describe("loras", () => {
     assert.equal(isCharacterLora("add_detail.safetensors"), false);
     assert.equal(isCharacterLora("pussy_juice_anima_V1.0.safetensors"), false);
     assert.equal(isCharacterLora("cunnilingus.safetensors"), false);
-    assert.match(characterLabel("Hestia (DanMachi) Illustrious v4.safetensors"), /Hestia/i);
+    assert.equal(isCharacterLora("DanMachi_LilirucaArde_IlluXL.safetensors"), true);
+    assert.equal(isCharacterLora("HighSchoolDxDHERO_RiasGremory_IlluXL.safetensors"), true);
+    assert.equal(isCharacterLora("Overlord_Albedo_IlluXL.safetensors"), true);
+    assert.equal(isCharacterLora("Raphtalia-shield-hero-illustrious.safetensors"), true);
+    assert.equal(isCharacterLora("chara_MushokuTensei_ErisBoreasGreyrat_v1.safetensors"), true);
+    assert.equal(isCharacterLora("Alice Starga2.safetensors"), true);
+    assert.equal(isCharacterLora("groolpanties.safetensors"), false);
+    assert.equal(characterShow("DanMachi_LilirucaArde_IlluXL.safetensors"), "DanMachi");
+    assert.match(characterLabel("HighSchoolDxDHERO_RiasGremory_IlluXL.safetensors"), /Rias/i);
   });
   it("turns on LoRAs when you type the character name", () => {
     const list: LoraEntry[] = [

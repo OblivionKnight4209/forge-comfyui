@@ -1,4 +1,4 @@
-# Forge v239
+# Forge v240
 
 Offline studio on your Linux Mint PC. **Forge is the cockpit. ComfyUI is the engine.** Nothing is sent to Grok or any cloud for generate / write / video.
 
@@ -26,14 +26,14 @@ pkill -f "vite|npm run dev" 2>/dev/null || true
 rm -rf "$HOME/forge"
 mkdir -p "$HOME/forge"
 cd "$HOME/Downloads"
-wget -O Forge-offline.zip https://github.com/OblivionKnight4209/forge-comfyui/releases/download/v239/Forge-offline.zip
+wget -O Forge-offline.zip https://github.com/OblivionKnight4209/forge-comfyui/releases/download/v240/Forge-offline.zip
 unzip -o Forge-offline.zip -d "$HOME/forge"
 cd "$HOME/forge"
 chmod +x start-forge.sh
 ./start-forge.sh
 ```
 
-The script must print **Forge v239**. Top-left corner of the page must say **239**. Hard refresh (`Ctrl+Shift+R`). If it still says 219, you unzipped an old zip.
+The script must print **Forge v240**. Top-left corner of the page must say **240**. Hard refresh (`Ctrl+Shift+R`). If it still says 219, you unzipped an old zip.
 
 Keep Comfy running in another terminal:
 

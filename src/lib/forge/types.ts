@@ -866,7 +866,31 @@ const LORA_ACT =
   /pussy|penis|cock|dick|clit|cervix|sex|fuck|anal|oral|tentacle|masturb|cum|semen|dildo|bead|rape|bdsm|bondage|pose|detail|realism|slider|style|panties|thong|nude|naked|breast|boob|nipple|ahegao|throat|creampie|bukkake|gangbang|controlnet|inpaint|canny|tile|upscale|helper|enhanc|watermark|detect|yolo|embed|hypernet|negative|add[_ -]?detail|more[_ -]?details|lightning|turbo|\blcm\b|motion|wan2|i2v|t2v|hires|ultra|\b4x\b|filmic|outfit|clothes|clothing|lingerie|grool|insert|object|choke|vomit|birth|impregn|ovipos|zombie|slime|xenomorph|canine|equine|porcine|insect|sheathe|spread|peek|juice|cameltoe|highleg|wardrobe|torn|finger|facesit|fellatio|cunnilingus|handjob|footjob|paizuri|mating|doggy|missionary|prone|spank|whip|collar|leash|gag|exposure|smear|filthy|nsfw[_ -]?master|noise|concept|helper|fix.?hand|body.?detect/i;
 
 const SHOW_HINT =
-  /\([^)]{3,}\)|danmachi|shield.?hero|genshin|honkai|naruto|one.?piece|ff7|final.?fantasy|pokemon|re:?zero|konosuba|overlord|fate|touhou|kancolle|azur.?lane|hololive|vocaloid|my.?hero|bleach|chainsaw|jujutsu|demon.?slayer|kimetsu|evangelion|\bsao\b|\baot\b|spy.?family|lockhart|raiden|hestia|raphtalia|liliruca|aerith|tifa|alice|angelina|mara|tamaki|takeda|shinano|kamiya/;
+  /\([^)]{3,}\)|danmachi|shield.?hero|\bfilosh\b|glasssh|atlafayon|raphtalia|sadeena|meltyq|kizuna|wydia|therese|genshin|honkai|naruto|one.?piece|ff7|final.?fantasy|pokemon|re:?zero|konosuba|overlord|albedo|shalltear|fate.?grand|\bfgo\b|touhou|kancolle|azur.?lane|hololive|vocaloid|my.?hero|bleach|chainsaw|jujutsu|demon.?slayer|kimetsu|evangelion|\bsao\b|\baot\b|spy.?family|anya.?forger|lockhart|raiden|hestia|liliruca|aerith|tifa|alice.?starg|angelina|mara|tamaki|takeda|shinano|kamiya|\bchara_|isekaimaou|isekai.?de.?cheat|mushoku.?tensei|tensura|tenken|highschool.?dxd|\bdxd\b|riasgremory|himejima|toujoukoneko|xenovia|no.?game.?no.?life|\bmge\b|monster.?musume|rosario.?vampire|mugen.?gacha|yami.?healer|hidden.?dungeon|arankparty|aparida|resident.?evil|redfield|valentine|wallenstein|midgar|hatsuse|\bjibril\b|noelle.?silva|sylphie|elinalise|eris.?boreas|remgalleu|luminous|shion|shuna|velzard|dungeon.?ni|isekai.?nonbiri|harpy|naga|lamia|\bkitsune\b|werewolf|hippogriff|basilisk|cockatrice|kelpie|\btengu\b|golem|filo|papi_|suu_|miia|meroune|arachnera|izuna|jill|claire|passiontifa|starga|syne.?lokk|syr.?flova|ryuu-danmachi|illuxl/i;
+
+export function characterShow(filename: string): string {
+  const s = (filename || "").toLowerCase();
+  if (/danmachi|liliruca|hestia|aiswallenstein|anyaflomer|chloelolo|yamatomikoto|syr.?flova|ryuu-/.test(s)) return "DanMachi";
+  if (/shield.?hero|filosh|glasssh|atlafayon|raphtalia|sadeena|melty|kizuna|keel-|wydia|therese|syne.?lokk/.test(s)) return "Shield Hero";
+  if (/dxd|riasgremory|himejima|koneko|xenovia|asiaargento|shidouirina|kiryuu|kunou/.test(s)) return "High School DxD";
+  if (/overlord|albedo|shalltear|emmot|antilene/.test(s)) return "Overlord";
+  if (/mushoku|eris.?boreas|elinalise|sylphie|\blinia\b/.test(s)) return "Mushoku Tensei";
+  if (/tensura|tenken|shion|shuna|velzard|luminous|suphia|myulan|dwargon|fran-/.test(s)) return "Tensura";
+  if (/isekaimaou|remgalleu|shera|lumachina|\bsylvie\b|\brosexl\b/.test(s)) return "Isekai Maou";
+  if (/isekai.?de.?cheat|kanzakirin|kazamakaede|lexia|midoumiu/.test(s)) return "Isekai Cheat Skill";
+  if (/no.?game|jibril|\bshiro\b|shuvi/.test(s)) return "No Game No Life";
+  if (/arankparty|aparida/.test(s)) return "A Rank Party";
+  if (/kimetsu|daki|hinatsuru/.test(s)) return "Demon Slayer";
+  if (/fate|ishtar/.test(s) && /babylonia|fgo|grand/.test(s)) return "Fate";
+  if (/monster.?musume|\bmge\b|papi_|suu_|miia|meroune|arachnera|lamia/.test(s)) return "Monster Musume";
+  if (/ff7|aerith|tifa|lockhart|final.?fantasy/.test(s)) return "Final Fantasy";
+  if (/resident|redfield|valentine/.test(s)) return "Resident Evil";
+  if (/mugen.?gacha/.test(s)) return "Mugen Gacha";
+  if (/yami.?healer/.test(s)) return "Yami Healer";
+  if (/rosario/.test(s)) return "Rosario Vampire";
+  if (/spy.?family|anya.?forger/.test(s)) return "Spy x Family";
+  return "Other";
+}
 
 /** Person / show-character LoRA — not an act, pose, or detail slider. */
 export function isCharacterLora(filename: string): boolean {
@@ -875,6 +899,7 @@ export function isCharacterLora(filename: string): boolean {
   if (!stem || isNotALora(base)) return false;
   if (LORA_ACT.test(stem)) return false;
   if (SHOW_HINT.test(stem)) return true;
+  if (/^chara_/i.test(stem) || /_IlluXL/i.test(stem)) return true;
   const trigger = loraTriggerFromFilename(base);
   if (!trigger || trigger.length < 3) return false;
   const words = trigger.split(/\s+/).filter((w) => /^[A-Za-z][A-Za-z']{2,}$/.test(w));
@@ -886,12 +911,24 @@ export function isCharacterLora(filename: string): boolean {
 }
 
 export function characterLabel(filename: string): string {
-  const t = loraTriggerFromFilename(filename);
-  const raw = t || (filename.replace(/\\/g, "/").split("/").pop() || filename).replace(/\.safetensors$/i, "");
-  return raw
+  let stem = (filename || "").replace(/\\/g, "/").split("/").pop() || "";
+  stem = stem.replace(/\.(safetensors|ckpt|pt|sft)$/i, "");
+  stem = stem.replace(/\s*\(\s*1\s*\)\s*/g, "");
+  stem = stem.replace(/_IlluXL(_v\d+)?$/i, "");
+  stem = stem.replace(/[-_]?(illustriousxl|illustrious|animabasev?\d*|anima|ponyxl|pony|noobai|sdxl|\bxl\b|nochekaiser|nvwls|epoch.+|illu).*$/i, "");
+  stem = stem.replace(/^(chara_|illu_)/i, "");
+  stem = stem.replace(
+    /^(DanMachi_|HighSchoolDxDHERO_|HighschoolDxD_|IsekaiMaou_|IsekaiDeCheatSkill_|MushokuTensei_|TenSura_|Overlord_|YamiHealer_|MugenGacha_|FateGrandOrderBabylonia_|KimetsuNoYaiba_|ARankParty\([^)]+\)_|RosarioVampire_-_)/i,
+    "",
+  );
+  stem = stem.replace(/[-_]+/g, " ").replace(/\s+/g, " ").trim();
+  stem = stem.replace(/([a-z])([A-Z])/g, "$1 $2");
+  const labeled = stem
     .split(/\s+/)
-    .map((w) => (w ? w[0]!.toUpperCase() + w.slice(1) : w))
+    .filter(Boolean)
+    .map((w) => w[0]!.toUpperCase() + w.slice(1))
     .join(" ");
+  return labeled || loraTriggerFromFilename(filename) || filename;
 }
 
 const LORA_NAME_STOP = new Set([

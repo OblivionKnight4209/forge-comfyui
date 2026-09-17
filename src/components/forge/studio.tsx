@@ -57,6 +57,7 @@ import {
   resolveLoraName,
   isCharacterLora,
   characterLabel,
+  characterShow,
   CKPT_STYLES,
   checkpointMatchesStyle,
   guessStyles,
@@ -2626,7 +2627,7 @@ export function Studio() {
     <div className="flex min-h-dvh flex-col overflow-x-hidden bg-bg pb-8 text-fg">
       <header className="flex flex-wrap items-center gap-2 px-3 py-3 md:gap-3 md:px-6">
         <p className="text-[15px] font-medium tracking-tight">Forge</p>
-        <span className="text-[11px] tabular-nums text-subtle">239</span>
+        <span className="text-[11px] tabular-nums text-subtle">240</span>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {meta.video ? (
             <select
@@ -3993,24 +3994,39 @@ export function Studio() {
                   <Input
                     value={peopleQ}
                     onChange={(e) => setPeopleQ(e.target.value)}
-                    placeholder="Find Hestia, Raphtalia, Alice…"
+                    placeholder="Find Hestia, Raphtalia, Rias, Albedo…"
                     className="h-9 bg-bg text-sm"
                   />
-                  <div className="flex max-h-40 flex-wrap gap-1.5 overflow-auto">
-                    {peopleLoras.map((l) => (
-                      <button
-                        key={l.id}
-                        type="button"
-                        title={l.filename}
-                        onClick={() => toggleCharacter(l)}
-                        className={
-                          l.enabled
-                            ? "h-9 max-w-[12rem] truncate rounded-full bg-accent px-3 text-xs text-accent-fg"
-                            : "h-9 max-w-[12rem] truncate rounded-full bg-raised px-3 text-xs text-fg"
-                        }
-                      >
-                        {characterLabel(l.filename)}
-                      </button>
+                  <div className="max-h-56 space-y-2 overflow-auto">
+                    {Array.from(
+                      peopleLoras.reduce((map, l) => {
+                        const g = characterShow(l.filename);
+                        const arr = map.get(g) ?? [];
+                        arr.push(l);
+                        map.set(g, arr);
+                        return map;
+                      }, new Map<string, typeof peopleLoras>()),
+                    ).map(([group, list]) => (
+                      <div key={group}>
+                        <p className="px-1 text-[10px] uppercase tracking-wide text-muted">{group}</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {list.map((l) => (
+                            <button
+                              key={l.id}
+                              type="button"
+                              title={l.filename}
+                              onClick={() => toggleCharacter(l)}
+                              className={
+                                l.enabled
+                                  ? "h-9 max-w-[12rem] truncate rounded-full bg-accent px-3 text-xs text-accent-fg"
+                                  : "h-9 max-w-[12rem] truncate rounded-full bg-raised px-3 text-xs text-fg"
+                              }
+                            >
+                              {characterLabel(l.filename)}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                     ))}
                   </div>
                   {!peopleLoras.length ? (
