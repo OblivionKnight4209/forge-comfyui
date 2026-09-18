@@ -18,7 +18,7 @@ import {
 } from "./types";
 import { applyArtWrap, applyQualityOffers, qualityWantsHires, stripComicPageTalk } from "./looks";
 import { buildApiWorkflow, pickLorasForPrompt, rewireLoadImages, triggerPrefix, i2iDenoise, combineDenoise } from "./workflows";
-import { flattenPrompt } from "./wildcards";
+import { flattenPrompt, grokExpand, isShortSubject } from "./wildcards";
 import { probeComfy, queuePrompt, uploadToComfy } from "./comfy.server";
 
 export type GenerateIntent = {
@@ -108,7 +108,19 @@ export async function runGenerateIntent(intent: GenerateIntent) {
     ? /same art style/i.test(promptIn)
       ? promptIn
       : `${promptIn}, same art style, same rendering, same lighting, same colors, same camera, do not restyle, only the requested edit`
-    : flattenPrompt(stillPrompt, intent.seed || 1);
+    : flattenPrompt(
+        isShortSubject(stillPrompt) && !/\{[^{}|]+\|/.test(stillPrompt)
+          ? grokExpand({
+              typed: stillPrompt,
+              files: [],
+              seed: intent.seed || 1,
+              checkpoint: ckpt,
+              nsfwMode: intent.nsfwMode,
+              roll: intent.roll,
+            })
+          : stillPrompt,
+        intent.seed || 1,
+      );
   const loraCkpt = video ? settings.wanUnet || settings.checkpoint : settings.checkpoint;
   const picked = pickLorasForPrompt(
     promptIn,
@@ -133,7 +145,7 @@ export async function runGenerateIntent(intent: GenerateIntent) {
         ),
       )
     : combining
-      ? combineDenoise(intent.denoise ?? 0.58, intent.images?.length || 2)
+      ? combineDenoise(intent.denoise ?? 0.58, intent.images?.length || 2, settings.lockFaces)
       : (intent.denoise ?? 0.65);
   const api = buildApiWorkflow({
     mode: intent.mode,
