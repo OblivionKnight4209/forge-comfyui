@@ -5,28 +5,32 @@ function pick<T>(arr: T[], i = 0): T {
   return arr[Math.abs(i) % arr.length]!;
 }
 
-/** Turn the prompt into something a person would actually say, not "mm". */
+const VISUAL_ONLY =
+  /\b(strip|undress|remove|take off|photo|still|image|cartoon|anime|illustration|woman|girl|man|boy|shot|camera|panel)\b/i;
+
+/** Dialogue only. Visual prompts must not become spoken captions. */
 export function speakableFromPrompt(prompt: string): string {
   const raw = (prompt || "").replace(/\{[^{}]*\}/g, " ").replace(/\s+/g, " ").trim();
   const quoted = [...raw.matchAll(/["\u201c']([^"\u201d']{3,90})["\u201d']/g)].map((m) => m[1]!.trim());
-  if (quoted[0]) return quoted[0]!;
+  if (quoted[0] && quoted[0].split(/\s+/).length >= 2) return quoted[0]!;
+  if (VISUAL_ONLY.test(raw) && !/["\u201c]/.test(raw)) return "";
   const clause = (raw.split(/[.|]/)[0] || raw).trim();
   const words = clause
     .replace(/,/g, " ")
     .split(/\s+/)
-    .filter((w) => w.length > 1 && !/^(lora|uncensored|nsfw|score_\d)$/i.test(w));
-  const line = words.slice(0, 18).join(" ").trim();
-  return line || "Look at this.";
+    .filter((w) => w.length > 2 && !/^(lora|uncensored|nsfw|explicit|score_\d|masterpiece|photoreal)$/i.test(w));
+  if (words.length < 4) return "";
+  return words.slice(0, 14).join(" ").trim();
 }
 
-/** Scene-matched SFX + spoken lines from the prompt. Offline. Not a cloud lip-sync model. */
 export function designClipAudio(prompt: string): { lines: VoiceLine[]; sfx: SfxKind; extra: SfxKind[] } {
   const p = (prompt || "").toLowerCase();
   const girl = /\b(girl|woman|she|her|female|lady|wife|queen|maid|heroine)\b/.test(p);
   const dude = /\b(guy|man|he|him|male|dude|king|husband|warrior|goblin|orc)\b/.test(p);
   const extra: SfxKind[] = [];
   let sfx: SfxKind = "room";
-  if (/\b(fuck|sex|moan|cock|pussy|orgasm|nsfw|rape|thrust|creampie|blowjob|anal)\b/.test(p)) sfx = "sex";
+  if (/\b(fuck|sex|moan|cock|pussy|orgasm|nsfw|rape|thrust|creampie|blowjob|anal|strip|undress|nude|naked)\b/.test(p))
+    sfx = "sex";
   else if (/\b(fight|punch|kick|clash|sword|battle|war|slash)\b/.test(p)) sfx = "fight";
   else if (/\b(horror|blood|scream|monster|gore|stab)\b/.test(p)) sfx = "horror";
   else if (/\b(rain|storm|thunder|downpour)\b/.test(p)) sfx = "rain";
@@ -42,21 +46,21 @@ export function designClipAudio(prompt: string): { lines: VoiceLine[]; sfx: SfxK
   const lines: VoiceLine[] = [];
   if (quoted.length) {
     quoted.slice(0, 2).forEach((t, i) => {
-      lines.push({ voice: i === 0 && girl ? "female" : dude && i === 1 ? "male" : girl ? "female" : "male", text: t });
+      lines.push({
+        voice: i === 0 && girl ? "female" : dude && i === 1 ? "male" : girl ? "female" : "male",
+        text: t,
+      });
     });
     return { lines, sfx, extra };
   }
+  if (sfx === "sex") return { lines: [], sfx, extra };
   const caption = speakableFromPrompt(prompt);
+  if (!caption) return { lines: [], sfx, extra };
   if (sfx === "fight") {
     if (girl) lines.push({ voice: "female", text: pick(["Look out!", "Get back!", "Move!"]) });
     if (dude) lines.push({ voice: "male", text: pick(["Stay down!", "Come on!", "Now!"]) });
-    if (!lines.length) lines.push({ voice: "male", text: caption });
   } else if (sfx === "horror") {
     lines.push({ voice: girl ? "female" : "male", text: pick(["Get away from me!", "No — stay back!", "Run!"]) });
-  } else if (girl && dude) {
-    lines.push({ voice: "female", text: caption });
-  } else {
-    lines.push({ voice: girl ? "female" : "male", text: caption });
   }
   return { lines, sfx, extra };
 }
@@ -67,12 +71,8 @@ export function ensureVoice(
 ): { lines: VoiceLine[]; sfx: SfxKind; extra: SfxKind[] } {
   const extra = plan.extra ?? [];
   if (plan.lines.length) return { ...plan, extra };
-  const girl = /\b(girl|woman|she|her|female|lady|wife|queen)\b/i.test(prompt || "");
-  return {
-    ...plan,
-    extra,
-    lines: [{ voice: girl ? "female" : "male", text: speakableFromPrompt(prompt) }],
-  };
+  const next = designClipAudio(prompt);
+  return { lines: next.lines, sfx: plan.sfx || next.sfx, extra: extra.length ? extra : next.extra };
 }
 
 function bedOne(sfx: SfxKind, tag: string): string {
