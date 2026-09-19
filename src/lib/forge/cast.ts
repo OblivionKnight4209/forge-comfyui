@@ -86,6 +86,14 @@ const CAST: CastRow[] = [
   { keys: ["silk"], looks: "a rank party girl, adult" },
   { keys: ["rain"], looks: "a rank party girl, adult" },
   { keys: ["angelina"], looks: "named woman, canon look, adult" },
+  { keys: ["alice starga2", "alice starga", "alicestarga2"], looks: "named heroine, long hair, canon outfit, adult" },
+  { keys: ["raphtaliakid", "raphtalia kid"], looks: "young raccoon demi-human look from early shield hero, tanuki ears, red eyes, adult-coded redesign, adult" },
+  { keys: ["shalltearbloodfallen", "shalltear bloodfallen"], looks: "vampire, silver-white hair, crimson eyes, gothic lolita dress, petite adult, fangs" },
+  { keys: ["syr flova", "syr_flova"], looks: "pink-red hair, blue eyes, hostess uniform, white shirt, black vest, adult" },
+  { keys: ["syne lokk", "syne_lokk"], looks: "shield hero supporting woman, canon look, adult" },
+  { keys: ["dwargon", "dwargonelf"], looks: "dwarf king or dark elf of tensura, adult" },
+  { keys: ["luminousvalentine"], looks: "vampire queen, pale blonde hair, red eyes, elegant gothic, adult" },
+  { keys: ["yamihealer", "lynga"], looks: "dark healer girl, canon look, adult" },
 ];
 
 function hay(filename: string) {
@@ -132,9 +140,24 @@ export function withCastBios(prompt: string, bios: string[]): string {
     return first.length > 2 && !new RegExp(`\\b${first.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(p);
   });
   if (!missing.length) {
-    const needLooks = bios.filter((b) => !/\b(hair|eyes|ears|tail|dress|armor)\b/i.test(p));
+    const needLooks = bios.filter((b) => !/\b(hair|eyes|ears|tail|dress|armor|ribbon)\b/i.test(p));
     if (!needLooks.length) return p;
     return `${needLooks.join(". ")}. ${p}`.trim();
   }
   return `${missing.join(". ")}${p ? `. ${p}` : ""}`.trim();
+}
+
+export function stripPersonFromPrompt(prompt: string, filename: string): string {
+  const label = characterLabel(filename);
+  const bio = characterBio(filename);
+  let p = (prompt || "").trim();
+  if (bio) {
+    const idx = p.toLowerCase().indexOf(bio.toLowerCase());
+    if (idx >= 0 && idx < 8) p = (p.slice(0, idx) + p.slice(idx + bio.length)).replace(/^[\s,.;]+/, "");
+  }
+  if (label && label.length > 2) {
+    const re = new RegExp(`${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[^.']{0,160}\\.\\s*`, "i");
+    p = p.replace(re, "");
+  }
+  return p.replace(/^[\s,.;]+/, "").replace(/\s+/g, " ").trim();
 }
