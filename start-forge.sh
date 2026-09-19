@@ -1,5 +1,5 @@
 #!/bin/bash
-# Forge — run on the same Linux Mint PC as ComfyUI. Offline after the first npm install.
+# Lantern — run on the same Linux Mint PC as ComfyUI. Offline after the first npm install.
 set -euo pipefail
 cd "$(dirname "$(readlink -f "$0")")"
 
@@ -10,21 +10,20 @@ if ! command -v node >/dev/null 2>&1; then
 fi
 
 if [ ! -d node_modules ]; then
-  echo "First launch: installing local packages (needs the net once). After this, Forge is offline."
+  echo "First launch: installing local packages (needs the net once). After this, Lantern is offline."
   npm install
 fi
 
 echo
-echo "Forge v270 — local only"
+echo "Forge v281 — local only"
 echo "Keep ComfyUI running:"
 echo "  cd ~/comfy/ComfyUI && source .venv/bin/activate && python main.py --listen 0.0.0.0 --port 8188 --enable-cors-header"
 echo
 echo "This PC (controls):  http://127.0.0.1:8080"
 echo "This PC (display):   http://127.0.0.1:8080/stage"
 echo "Laptop / phone:      http://$(hostname -I | awk '{print $1}'):8080"
-echo "If the top-left does not say 270, you unzipped the old zip."
-echo "Human clip voices (once):  bash ~/forge/scripts/install-voices.sh"
-echo "Also:  sudo apt install -y ffmpeg"
+echo "If the top-left does not say 281, you unzipped the old zip."
+echo "Sound on clips needs:  sudo apt install -y ffmpeg espeak-ng piper"
 echo "Laptop: same Wi-Fi, http://$(hostname -I | awk '{print $1}'):8080  (not 127.0.0.1)"
 echo
 
