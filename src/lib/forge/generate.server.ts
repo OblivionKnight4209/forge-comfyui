@@ -41,6 +41,33 @@ export type GenerateIntent = {
   inputH?: number;
 };
 
+/** Files that CheckpointLoaderSimple can feed CLIPTextEncode. */
+export function stillHasClip(name: string) {
+  const n = (name || "").toLowerCase().replace(/\\/g, "/");
+  const base = n.split("/").pop() || n;
+  if (!base || !isRealCheckpoint(base)) return false;
+  if (
+    /unet|gguf|fp8_scaled|nvfp4|zimage|z-image|klein|minimax|qwen_image|text.?encoder|t5xxl|umt5|gemma|hunyuan|lumina|nextdit|svd|flux1|flux-1|\bflux\b|dit-v2|h3_|mmh3/i.test(
+      base,
+    )
+  ) {
+    return false;
+  }
+  if (/krea2/.test(base) && !/xl|pony|illustrious|anima/.test(base)) return false;
+  return true;
+}
+
+function pickSafeCkpt(want: string, list: string[]) {
+  const safe = list.filter(stillHasClip);
+  if (want && safe.includes(want)) return want;
+  const prefer =
+    safe.find((n) => /anythingxl/i.test(n)) ||
+    safe.find((n) => /dasiwaillustrious/i.test(n)) ||
+    safe.find((n) => /juggernaut/i.test(n)) ||
+    safe.find((n) => /illustrious|anima|pony|sdxl/i.test(n) && !/inpaint/i.test(n));
+  return prefer || safe[0] || "";
+}
+
 export async function runGenerateIntent(intent: GenerateIntent) {
   const promptIn = (intent.prompt || "").trim();
   if (!promptIn) return { ok: false as const, message: "Type a prompt first." };
@@ -51,13 +78,22 @@ export async function runGenerateIntent(intent: GenerateIntent) {
   }
 
   const ckpts = (status.checkpoints || []).filter(isRealCheckpoint);
-  const ckpt =
-    (intent.checkpoint && ckpts.includes(intent.checkpoint) && intent.checkpoint) ||
-    (intent.settings?.checkpoint && ckpts.includes(intent.settings.checkpoint) && intent.settings.checkpoint) ||
-    ckpts[0] ||
-    "";
+  const asked = intent.checkpoint || intent.settings?.checkpoint || "";
+  const archAsked = asked ? guessArch(asked) : "sdxl";
+  let ckpt = "";
+  if (archAsked === "flux" && asked && ckpts.includes(asked)) {
+    ckpt = asked;
+  } else {
+    ckpt = pickSafeCkpt(asked, ckpts);
+  }
   if (!ckpt && intent.mode !== "t2v" && intent.mode !== "i2v" && intent.mode !== "ref2v" && intent.mode !== "v2v") {
-    return { ok: false as const, message: "No checkpoints on the PC. Comfy must see models/checkpoints." };
+    return {
+      ok: false as const,
+      message:
+        asked && !stillHasClip(asked)
+          ? `${asked.split("/").pop()} has no CLIP / text encoder. Pick AnythingXL, Dasiwa Illustrious, or Juggernaut — not a UNET / Flux / GGUF dumped in checkpoints.`
+          : "No usable image checkpoint on the PC.",
+    };
   }
 
   const rec = ckpt ? settingsForCheckpoint(ckpt) : DEFAULT_COMFY;
@@ -68,6 +104,22 @@ export async function runGenerateIntent(intent: GenerateIntent) {
     checkpoint: ckpt || intent.settings?.checkpoint || "",
     baseUrl: "http://127.0.0.1:8188",
   };
+  if (guessArch(ckpt) === "flux") {
+    settings.stillLoader = "flux-unet";
+    settings.stillFamily = "flux";
+    settings.fluxUnet = ckpt;
+    const clips = status.clips || [];
+    const vaes = status.vaes || [];
+    settings.fluxClipL = clips.find((c) => /clip_l/i.test(c)) || settings.fluxClipL;
+    settings.fluxT5 = clips.find((c) => /t5xxl/i.test(c)) || settings.fluxT5;
+    settings.fluxVae = vaes.find((v) => /^ae\.safetensors$/i.test(v) || /flux.*vae|\bae\.safetensors/i.test(v)) || settings.fluxVae;
+    if (!clips.some((c) => /clip_l/i.test(c)) || !clips.some((c) => /t5/i.test(c))) {
+      return {
+        ok: false as const,
+        message: "Flux file needs clip_l + t5xxl in models/text_encoders. This mix has no CLIP inside the checkpoint.",
+      };
+    }
+  }
 
   const video = MODE_META[intent.mode]?.video;
   if (video) {
