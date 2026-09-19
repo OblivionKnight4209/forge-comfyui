@@ -41,31 +41,37 @@ export type GenerateIntent = {
   inputH?: number;
 };
 
-/** Files that CheckpointLoaderSimple can feed CLIPTextEncode. */
+/** Only files that never contain CLIP. Do not treat Illustrious / Pony / Anima / Krea XL as dead. */
 export function stillHasClip(name: string) {
   const n = (name || "").toLowerCase().replace(/\\/g, "/");
   const base = n.split("/").pop() || n;
-  if (!base || !isRealCheckpoint(base)) return false;
-  if (
-    /unet|gguf|fp8_scaled|nvfp4|zimage|z-image|klein|minimax|qwen_image|text.?encoder|t5xxl|umt5|gemma|hunyuan|lumina|nextdit|svd|flux1|flux-1|\bflux\b|dit-v2|h3_|mmh3/i.test(
-      base,
-    )
-  ) {
+  if (!base) return false;
+  if (!isRealCheckpoint(base) && !isRealCheckpoint(name)) return false;
+  if (/hunyuan3d|triposr|lumina|nextdit|next-dit|svd_xt|\bsvd\b|dit-v2|qwen_image|text.?encoder|t5xxl|umt5|gemma4|gemma_/i.test(base))
     return false;
-  }
-  if (/krea2/.test(base) && !/xl|pony|illustrious|anima/.test(base)) return false;
+  if (/\.gguf$/i.test(base)) return false;
+  if (/^(ae|clip_l|clip_g)\.safetensors$/i.test(base)) return false;
+  if (/flux1[-_.]?(dev|schnell)|flux-unet|flux_unet/i.test(base) && !/xl|pony|illustrious|anima/i.test(base))
+    return false;
+  if (/_unet|unet_only|diffusion_pytorch/i.test(base) && !/xl|pony|illustrious|sd15|checkpoint/i.test(base))
+    return false;
   return true;
 }
 
 function pickSafeCkpt(want: string, list: string[]) {
+  if (want && list.includes(want) && stillHasClip(want)) return want;
+  if (want && list.includes(want)) {
+    /* user picked a known-dead file — fall through */
+  } else if (want && list.includes(want)) {
+    return want;
+  }
   const safe = list.filter(stillHasClip);
-  if (want && safe.includes(want)) return want;
-  const prefer =
-    safe.find((n) => /anythingxl/i.test(n)) ||
-    safe.find((n) => /dasiwaillustrious/i.test(n)) ||
-    safe.find((n) => /juggernaut/i.test(n)) ||
-    safe.find((n) => /illustrious|anima|pony|sdxl/i.test(n) && !/inpaint/i.test(n));
-  return prefer || safe[0] || "";
+  if (want) {
+    const base = want.replace(/\\/g, "/").split("/").pop() || want;
+    const hit = safe.find((n) => n === want || n.endsWith("/" + base) || n === base);
+    if (hit) return hit;
+  }
+  return safe[0] || (list[0] ?? "");
 }
 
 export async function runGenerateIntent(intent: GenerateIntent) {
@@ -81,7 +87,9 @@ export async function runGenerateIntent(intent: GenerateIntent) {
   const asked = intent.checkpoint || intent.settings?.checkpoint || "";
   const archAsked = asked ? guessArch(asked) : "sdxl";
   let ckpt = "";
-  if (archAsked === "flux" && asked && ckpts.includes(asked)) {
+  if (asked && ckpts.includes(asked) && stillHasClip(asked)) {
+    ckpt = asked;
+  } else if (archAsked === "flux" && asked && ckpts.includes(asked)) {
     ckpt = asked;
   } else {
     ckpt = pickSafeCkpt(asked, ckpts);
@@ -91,7 +99,7 @@ export async function runGenerateIntent(intent: GenerateIntent) {
       ok: false as const,
       message:
         asked && !stillHasClip(asked)
-          ? `${asked.split("/").pop()} has no CLIP / text encoder. Pick AnythingXL, Dasiwa Illustrious, or Juggernaut — not a UNET / Flux / GGUF dumped in checkpoints.`
+          ? `${asked.split("/").pop()} has no CLIP. Pick a full XL / Pony / Illustrious / 1.5 mix.`
           : "No usable image checkpoint on the PC.",
     };
   }
@@ -101,24 +109,13 @@ export async function runGenerateIntent(intent: GenerateIntent) {
     ...DEFAULT_COMFY,
     ...rec,
     ...intent.settings,
-    checkpoint: ckpt || intent.settings?.checkpoint || "",
+    checkpoint: ckpt,
     baseUrl: "http://127.0.0.1:8188",
   };
   if (guessArch(ckpt) === "flux") {
-    settings.stillLoader = "flux-unet";
+    settings.stillLoader = /unet|diffusion/.test(ckpt.toLowerCase()) ? "flux-unet" : settings.stillLoader;
     settings.stillFamily = "flux";
     settings.fluxUnet = ckpt;
-    const clips = status.clips || [];
-    const vaes = status.vaes || [];
-    settings.fluxClipL = clips.find((c) => /clip_l/i.test(c)) || settings.fluxClipL;
-    settings.fluxT5 = clips.find((c) => /t5xxl/i.test(c)) || settings.fluxT5;
-    settings.fluxVae = vaes.find((v) => /^ae\.safetensors$/i.test(v) || /flux.*vae|\bae\.safetensors/i.test(v)) || settings.fluxVae;
-    if (!clips.some((c) => /clip_l/i.test(c)) || !clips.some((c) => /t5/i.test(c))) {
-      return {
-        ok: false as const,
-        message: "Flux file needs clip_l + t5xxl in models/text_encoders. This mix has no CLIP inside the checkpoint.",
-      };
-    }
   }
 
   const video = MODE_META[intent.mode]?.video;
